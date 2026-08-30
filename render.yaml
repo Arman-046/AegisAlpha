@@ -1,22 +1,10 @@
 services:
   - type: web
-    name: aegisalpha-dashboard
+    name: aegisalpha
     env: python
+    plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: streamlit run dashboard.py --server.port $PORT
-    envVars:
-      - key: APCA_API_KEY_ID
-        sync: false
-      - key: APCA_API_SECRET_KEY
-        sync: false
-      - key: PAPER
-        value: "True"
-  
-  - type: worker
-    name: aegisalpha-agent
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: python main.py
+    startCommand: bash start.sh
     envVars:
       - key: APCA_API_KEY_ID
         sync: false
