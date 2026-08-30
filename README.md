@@ -49,32 +49,32 @@ The central thesis of AegisAlpha is that LLMs are excellent at synthesizing comp
 ```mermaid
 flowchart TD
     subgraph 📡 Live Data Layer
-        E(Event Streams: Stock, News)
-        A(Alpaca MCP Server Data)
-        V(Realized Volatility Engine)
+        E["Event Streams: Stock, News"]
+        A["Alpaca MCP Server Data"]
+        V["Realized Volatility Engine"]
     end
 
     subgraph 🗣️ AI Reasoning Pipeline
-        E -->|Trigger| B(🐂 Bull Agent)
-        E -->|Trigger| Be(🐻 Bear Agent)
+        E -->|Trigger| B["🐂 Bull Agent"]
+        E -->|Trigger| Be["🐻 Bear Agent"]
         V --> T
-        B --> T(⚖️ Synthesizer / Trader)
+        B --> T["⚖️ Synthesizer / Trader"]
         Be --> T
     end
 
     subgraph 🎯 Selection & Ranking
-        T -->|Generate Direction| S(Option Contract Selector)
-        S -->|Targeted Snapshots| R(Rank Opportunity Score)
+        T -->|Generate Direction| S["Option Contract Selector"]
+        S -->|Targeted Snapshots| R["Rank Opportunity Score"]
     end
 
     subgraph 🛡️ Deterministic Risk Layer
-        R --> RM(LLM Risk Manager)
-        RM -->|Approval & Conf| HL(Hard Limits: 2%, Sector, Direction)
+        R --> RM["LLM Risk Manager"]
+        RM -->|Approval & Conf| HL["Hard Limits: 2%, Sector, Direction"]
     end
 
     subgraph ⚡ Execution
-        HL -->|Passed| O(Submit Limit Order)
-        O --> M(Position Monitor / Exits)
+        HL -->|Passed| O["Submit Limit Order"]
+        O --> M["Position Monitor / Exits"]
     end
 ```
 
@@ -163,9 +163,9 @@ The accompanying demonstration video showcases the live autonomous system in act
 
 ---
 
-## 🚀 Monday Launch Procedure (Live Scoring)
+## 🚀 Usage
 
-To begin the official autonomous trading session:
+To begin the autonomous trading session:
 1. Verify `.env` contains the correct Official Paper Credentials.
 2. Confirm `PAPER=True` in `config/settings.py`.
 3. Run the autonomous loop:
@@ -173,7 +173,7 @@ To begin the official autonomous trading session:
    python main.py
    ```
 4. Verify the startup logs, preflight completion, and data stream connections.
-5. **Hands Off:** Leave the agent running autonomously. Do not manually intervene.
+5. **Hands Off:** The agent will run autonomously and manage positions strictly according to its deterministic risk profile.
 
 ---
 <div align="center">
