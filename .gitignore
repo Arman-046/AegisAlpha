@@ -11,7 +11,7 @@ venv/
 env/
 
 state/memory.json
-
+state/system_status.json
 logs/
 *.log
 

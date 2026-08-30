@@ -178,6 +178,35 @@ The accompanying demonstration video showcases the live autonomous system in act
 
 ---
 
+## 🌐 Live Demo Deployment
+
+The AegisAlpha project includes a professional web dashboard built with Streamlit. The dashboard provides read-only, real-time insights into the agent's performance, positions, and decision pipeline.
+
+### Deployment Options
+
+The included `render.yaml` supports simple deployment to Render as two separate services:
+1. **Web Service (Dashboard):** Runs the Streamlit dashboard on `$PORT`.
+2. **Background Worker:** Runs the `main.py` autonomous trading agent continuously.
+
+**To deploy:**
+1. Connect your repository to Render.
+2. Select "Blueprint" deployment and point to `render.yaml`.
+3. Provide your environment variables when prompted.
+
+### Running the Dashboard Locally
+
+If you want to view the dashboard locally while your agent runs:
+```bash
+# In terminal 1 (starts the agent)
+python main.py
+
+# In terminal 2 (starts the dashboard)
+streamlit run dashboard.py
+```
+Open `http://localhost:8501` to view your live stats.
+
+---
+
 ## 🚀 Usage
 
 To begin the autonomous trading session:

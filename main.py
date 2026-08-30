@@ -2,6 +2,8 @@ import asyncio
 import time
 import os
 import threading
+import json
+from datetime import datetime, timezone
 from config.settings import settings
 from config.preflight import run_preflight_checks
 from data.market_clock import is_market_open
@@ -313,6 +315,24 @@ def start_streams():
         log.error(f"Failed to start TradingStream: {e}")
 
 
+async def heartbeat_loop():
+    """Background task to write agent status for the dashboard."""
+    status_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state", "system_status.json")
+    os.makedirs(os.path.dirname(status_file), exist_ok=True)
+    while True:
+        try:
+            status = {
+                "status": "RUNNING",
+                "last_heartbeat": datetime.now(timezone.utc).isoformat(),
+                "market_open": is_market_open(trading_client)
+            }
+            with open(status_file, "w") as f:
+                json.dump(status, f)
+        except Exception as e:
+            log.error(f"Error in heartbeat_loop: {e}")
+        
+        await asyncio.sleep(60)
+
 async def autonomous_loop():
     global main_loop
     main_loop = asyncio.get_running_loop()
@@ -338,6 +358,8 @@ async def autonomous_loop():
     log.info(f"Starting Equity: ${start_equity:.2f}")
     
     start_streams()
+    
+    asyncio.create_task(heartbeat_loop())
     
     # Periodic background loop for state reconciliation and position monitoring
     while True:
