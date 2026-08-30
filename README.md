@@ -22,6 +22,21 @@ Unlike naive LLM trading bots that blindly buy based on sentiment, AegisAlpha im
 
 ---
 
+## 🧩 Why AegisAlpha?
+
+Most AI trading bots have one critical weakness: the same model that interprets market information may also influence position sizing and execution.
+
+AegisAlpha separates those responsibilities.
+
+- **AI reasons** about opportunities.
+- **Market data informs** the decision.
+- **Deterministic code enforces** risk boundaries.
+- **Alpaca executes** only after every hard constraint passes.
+
+This architecture allows the agent to reject low-quality signals, resize valid opportunities, and choose not to trade when the risk profile is unacceptable.
+
+---
+
 ## ✨ Key Differentiators
 
 * ⚖️ **Adversarial Reasoning**: Dedicated LLM instances build competing bull and bear cases to reduce confirmation bias.
@@ -48,13 +63,13 @@ The central thesis of AegisAlpha is that LLMs are excellent at synthesizing comp
 
 ```mermaid
 flowchart TD
-    subgraph 📡 Live Data Layer
+    subgraph DataLayer ["📡 Live Data Layer"]
         E["Event Streams: Stock, News"]
         A["Alpaca MCP Server Data"]
         V["Realized Volatility Engine"]
     end
 
-    subgraph 🗣️ AI Reasoning Pipeline
+    subgraph Reasoning ["🗣️ AI Reasoning Pipeline"]
         E -->|Trigger| B["🐂 Bull Agent"]
         E -->|Trigger| Be["🐻 Bear Agent"]
         V --> T
@@ -62,17 +77,17 @@ flowchart TD
         Be --> T
     end
 
-    subgraph 🎯 Selection & Ranking
+    subgraph Selection ["🎯 Selection & Ranking"]
         T -->|Generate Direction| S["Option Contract Selector"]
         S -->|Targeted Snapshots| R["Rank Opportunity Score"]
     end
 
-    subgraph 🛡️ Deterministic Risk Layer
+    subgraph RiskLayer ["🛡️ Deterministic Risk Layer"]
         R --> RM["LLM Risk Manager"]
         RM -->|Approval & Conf| HL["Hard Limits: 2%, Sector, Direction"]
     end
 
-    subgraph ⚡ Execution
+    subgraph ExecutionLayer ["⚡ Execution"]
         HL -->|Passed| O["Submit Limit Order"]
         O --> M["Position Monitor / Exits"]
     end
