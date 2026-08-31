@@ -67,9 +67,13 @@ def fetch_news(symbol: str, limit: int = 5) -> List[Any]:
             limit=limit
         )
         news = news_client.get_news(request)
-        if not news or not news.news:
-            return []
-        return news.news
+        if hasattr(news, 'news') and news.news:
+            return news.news
+        elif hasattr(news, 'data') and news.data:
+            return news.data
+        elif isinstance(news, list):
+            return news
+        return []
     except APIError as e:
         log.warning(f"APIError fetching news for {symbol}: {e}")
         raise e

@@ -34,10 +34,16 @@ class RiskDecision(BaseModel):
     adjusted_confidence: float = Field(ge=0.0, le=1.0)
     rationale: str
 
-try:
-    async_client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-except Exception:
-    async_client = None
+_async_client = None
+
+def get_async_client():
+    global _async_client
+    if _async_client is None:
+        try:
+            _async_client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        except Exception:
+            pass
+    return _async_client
 
 def _extract_json(raw_text: str) -> dict:
     if raw_text.startswith("```json"):
@@ -50,9 +56,10 @@ def _extract_json(raw_text: str) -> dict:
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=False, retry_error_callback=lambda rs: None)
 async def _run_analyst(symbol: str, prompt: str, system_prompt: str) -> AnalystDecision | None:
-    if not async_client: return None
+    client = get_async_client()
+    if not client: return None
     try:
-        res = await async_client.messages.create(
+        res = await client.messages.create(
             model=settings.ANTHROPIC_MODEL_ID,
             max_tokens=300,
             system=system_prompt,
@@ -66,11 +73,12 @@ async def _run_analyst(symbol: str, prompt: str, system_prompt: str) -> AnalystD
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=False, retry_error_callback=lambda rs: None)
 async def _run_trader(symbol: str, prompt: str) -> TraderDecision | None:
-    if not async_client: return None
+    client = get_async_client()
+    if not client: return None
     try:
         messages = [{"role": "user", "content": prompt}]
         # Trader has access to MCP tools
-        res = await async_client.messages.create(
+        res = await client.messages.create(
             model=settings.ANTHROPIC_MODEL_ID,
             max_tokens=400,
             system=TRADER_SYSTEM_PROMPT,
@@ -100,7 +108,7 @@ async def _run_trader(symbol: str, prompt: str) -> TraderDecision | None:
             })
             
             # Send result back
-            res = await async_client.messages.create(
+            res = await client.messages.create(
                 model=settings.ANTHROPIC_MODEL_ID,
                 max_tokens=400,
                 system=TRADER_SYSTEM_PROMPT,
@@ -118,9 +126,10 @@ async def _run_trader(symbol: str, prompt: str) -> TraderDecision | None:
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=False, retry_error_callback=lambda rs: None)
 async def _run_risk_manager(symbol: str, prompt: str) -> RiskDecision | None:
-    if not async_client: return None
+    client = get_async_client()
+    if not client: return None
     try:
-        res = await async_client.messages.create(
+        res = await client.messages.create(
             model=settings.ANTHROPIC_MODEL_ID,
             max_tokens=300,
             system=RISK_SYSTEM_PROMPT,
