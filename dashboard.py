@@ -211,5 +211,11 @@ def dashboard_content():
     ```
     """)
 
-# Render the fragment
-dashboard_content()
+# Mode Toggle
+mode = st.radio("Environment", ["🟢 LIVE PAPER", "🔵 DEMO MODE"], horizontal=True, label_visibility="collapsed")
+
+if mode == "🟢 LIVE PAPER":
+    dashboard_content()
+else:
+    from dashboard_demo import render_demo_dashboard
+    render_demo_dashboard()

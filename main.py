@@ -27,7 +27,7 @@ from risk.hard_limits import (
     validate_max_open_positions,
     RiskRejection
 )
-from execution.orders import submit_limit_order
+from execution.engine import ExecutionEngine, LivePaperExecutionEngine
 from execution.reconciliation import verify_order_state
 from positions.monitor import evaluate_and_exit_positions
 from app_logging.logger import get_logger
@@ -126,17 +126,23 @@ async def process_symbol(symbol: str, open_positions: int, event_context: str = 
     log.info(f"Candidate {symbol} passed ranking threshold with score {score:.2f}.")
     return final_opp
 
-async def execute_opportunity(top_opp: dict):
+async def execute_opportunity(top_opp: dict, engine: ExecutionEngine = None, current_positions=None, current_loop_equity: float = None):
     try:
-        current_positions = trading_client.get_all_positions()
+        if engine is None:
+            engine = LivePaperExecutionEngine()
+            
+        if current_positions is None:
+            current_positions = trading_client.get_all_positions()
+            
         if not validate_max_open_positions(len(current_positions)):
             log.info("Max positions reached during execution loop. Stopping further executions.")
             return
             
         log.info(f"Evaluating execution for candidate: {top_opp['contract']}")
         
-        acct_loop = trading_client.get_account()
-        current_loop_equity = float(acct_loop.equity)
+        if current_loop_equity is None:
+            acct_loop = trading_client.get_account()
+            current_loop_equity = float(acct_loop.equity)
         
         qty, risk = calculate_final_position_size(
             symbol=top_opp['symbol'],
@@ -146,7 +152,7 @@ async def execute_opportunity(top_opp: dict):
             ask_price=top_opp['ask']
         )
         
-        order = submit_limit_order(
+        order = engine.submit_limit_order(
             symbol=top_opp['contract'],
             qty=qty,
             bid=top_opp['bid'],
