@@ -1,5 +1,6 @@
 <div align="center">
-  
+  <img src="aegisalpha_logo.png" width="300" alt="AegisAlpha Logo">
+
 # 🛡️ AegisAlpha
 **Autonomous Event-Driven Options Agent powered by Claude 3.5 Sonnet & Alpaca**
 
