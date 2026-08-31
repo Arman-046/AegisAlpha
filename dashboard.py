@@ -11,7 +11,7 @@ from alpaca.trading.enums import OrderSide, QueryOrderStatus
 # Must be the first Streamlit command
 st.set_page_config(
     page_title="AegisAlpha | Autonomous Agent",
-    page_icon="aegisalpha_logo.png",
+    page_icon="aegisalpha_logo_v2.png",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -65,7 +65,7 @@ def dashboard_content():
     with col1:
         logo_col, title_col = st.columns([1, 8])
         with logo_col:
-            st.image("aegisalpha_logo.png", width=60)
+            st.image("aegisalpha_logo_v2.png", width=60)
         with title_col:
             st.title("AegisAlpha")
         st.caption("AI Proposes. Data Informs. Risk Governs. Code Executes.")
