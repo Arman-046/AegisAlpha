@@ -124,49 +124,58 @@ def dashboard_content():
     daily_pnl_pct = (daily_pnl / float(account.last_equity)) * 100 if float(account.last_equity) > 0 else 0
     metric_cols[3].metric("Daily P&L", f"${daily_pnl:,.2f}", f"{daily_pnl_pct:,.2f}%")
     
-    if daily_pnl == 0.0:
-        st.info("🛡️ **NO-TRADE IS A DECISION**\n\n**WHY $0?**\nNo positions have been opened during the current session.\nAegisAlpha does not trade unless an opportunity passes its complete quality and risk pipeline.\nAn absence of orders does not mean the agent is inactive.\n\n*AI PROPOSES. DATA INFORMS. RISK GOVERNS. CODE EXECUTES.*")
-
-    st.markdown("---")
-
-    # 4. OPEN POSITIONS
-    st.subheader("Open Positions")
-    if not positions:
-        st.info("No open positions.")
+    has_trade_activity = len(positions) > 0 or len(orders) > 0 or daily_pnl != 0.0
+    
+    if not has_trade_activity:
+        if not market_open:
+            st.info("🌙 **MARKET CLOSED — NO ACTIVITY TODAY**\n\nThe market is currently closed and no trades were executed during this session.")
+        else:
+            decisions = memory.get("history", [])
+            last_reason = "No qualifying market events have triggered a trade today."
+            if decisions:
+                last_decision = decisions[-1]
+                action = last_decision.get("action", "")
+                reason = last_decision.get("reason", "")
+                if action == "VETOED":
+                    last_reason = f"Last opportunity evaluated ({last_decision.get('symbol')}) was rejected.\n**Reason:** {reason}"
+                    
+            st.info(f"🛡️ **NO-TRADE IS A DECISION**\n\n**WHY NO TRADES?**\n{last_reason}\n\nAegisAlpha does not trade simply for activity's sake. It waits until an opportunity passes the complete quality and risk pipeline.\n\n*AI PROPOSES. DATA INFORMS. RISK GOVERNS. CODE EXECUTES.*")
     else:
-        pos_data = []
-        for p in positions:
-            pos_data.append({
-                "Symbol": p.symbol,
-                "Qty": float(p.qty),
-                "Side": p.side.name,
-                "Market Value": f"${float(p.market_value):,.2f}",
-                "Cost Basis": f"${float(p.cost_basis):,.2f}",
-                "Unrealized P&L": f"${float(p.unrealized_pl):,.2f}",
-                "Unrealized P&L %": f"{float(p.unrealized_plpc)*100:,.2f}%"
-            })
-        st.dataframe(pd.DataFrame(pos_data), use_container_width=True, hide_index=True)
-
-    st.markdown("---")
-
-    # 5. RECENT ACTIVITY (Orders)
-    st.subheader("Recent Orders")
-    if not orders:
-        st.info("No recent orders.")
-    else:
-        order_data = []
-        for o in orders:
-            order_data.append({
-                "Symbol": o.symbol,
-                "Side": o.side.name,
-                "Status": o.status.name,
-                "Filled Qty": float(o.filled_qty),
-                "Limit Price": f"${float(o.limit_price):,.2f}" if o.limit_price else "N/A",
-                "Avg Fill Price": f"${float(o.filled_avg_price):,.2f}" if o.filled_avg_price else "N/A",
-                "Submitted At": o.submitted_at.strftime("%Y-%m-%d %H:%M") if o.submitted_at else "N/A"
-            })
-        st.dataframe(pd.DataFrame(order_data), use_container_width=True, hide_index=True)
-        
+        st.subheader("Live Trade Activity")
+        if positions:
+            st.markdown("#### CURRENT POSITION(S)")
+            pos_data = []
+            for p in positions:
+                pos_data.append({
+                    "Symbol": p.symbol,
+                    "Qty": float(p.qty),
+                    "Side": p.side.name,
+                    "Market Value": f"${float(p.market_value):,.2f}",
+                    "Cost Basis": f"${float(p.cost_basis):,.2f}",
+                    "Unrealized P&L": f"${float(p.unrealized_pl):,.2f}",
+                    "Unrealized P&L %": f"{float(p.unrealized_plpc)*100:,.2f}%"
+                })
+            st.dataframe(pd.DataFrame(pos_data), use_container_width=True, hide_index=True)
+            
+        if orders:
+            st.markdown("#### RECENT ORDERS")
+            order_data = []
+            for o in orders:
+                order_data.append({
+                    "Symbol": o.symbol,
+                    "Side": o.side.name,
+                    "Status": o.status.name,
+                    "Filled Qty": float(o.filled_qty),
+                    "Limit Price": f"${float(o.limit_price):,.2f}" if o.limit_price else "N/A",
+                    "Avg Fill Price": f"${float(o.filled_avg_price):,.2f}" if o.filled_avg_price else "N/A",
+                    "Submitted At": o.submitted_at.strftime("%Y-%m-%d %H:%M") if o.submitted_at else "N/A"
+                })
+            st.dataframe(pd.DataFrame(order_data), use_container_width=True, hide_index=True)
+            
+        if not positions and not orders:
+            # Fallback if P&L != 0 but no orders/positions are retrieved
+            st.info("No active positions or recent orders retrieved, but Daily P&L reflects closed trades.")
+            
     st.markdown("---")
     
     # 5b. RECENT AGENT ACTIVITY (Memory)
