@@ -112,14 +112,18 @@ def _animate_high_quality():
         draw_step("🏆", "OPPORTUNITY RANK", f"Scores the opportunity against the configured quality threshold. Score: 75/100 (Threshold: {settings.MIN_RANK_SCORE_THRESHOLD})")
         
         # Risk engine
-        st.markdown("### 🛡️ THE AI CAN RECOMMEND. THE RISK ENGINE DECIDES.")
-        st.caption("LLM confidence does NOT override mathematical risk limits.")
+        st.markdown("""
+        <div style="background-color: #0f172a; padding: 20px; border-radius: 8px; border: 1px solid #1e293b; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #f8fafc;">🛡️ AI PROPOSES. RISK DECIDES.</h3>
+            <p style="color: #94a3b8; font-size: 0.9em; margin-bottom: 20px;">Deterministic portfolio constraints cannot be overridden by the AI.</p>
+        """, unsafe_allow_html=True)
         draw_step("🛡️", "RISK ENGINE", "Deterministic portfolio rules decide whether the trade is allowed.")
         risk_cols = st.columns(2)
         risk_cols[0].success(f"✓ Max trade risk: {settings.MAX_RISK_PERCENT*100}% OK")
         risk_cols[1].success(f"✓ Sector exposure: {settings.MAX_SECTOR_EXPOSURE_PERCENT*100}% OK")
         risk_cols[0].success(f"✓ Directional exposure: {settings.MAX_DIRECTIONAL_EXPOSURE_PERCENT*100}% OK")
         risk_cols[1].success(f"✓ Min rank: {settings.MIN_RANK_SCORE_THRESHOLD} OK")
+        st.markdown("</div>", unsafe_allow_html=True)
         _delay()
         
         symbol = "NVDA"
@@ -193,8 +197,11 @@ def _animate_risk_rejected():
         draw_step("🏆", "OPPORTUNITY RANK", f"Scores the opportunity against the configured quality threshold. RANK SCORE: 74/100 ✓ (Minimum: {settings.MIN_RANK_SCORE_THRESHOLD})")
         
         # Risk engine
-        st.markdown("### 🛡️ THE AI CAN RECOMMEND. THE RISK ENGINE DECIDES.")
-        st.caption("LLM confidence does NOT override mathematical risk limits.")
+        st.markdown("""
+        <div style="background-color: #0f172a; padding: 20px; border-radius: 8px; border: 1px solid #1e293b; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #f8fafc;">🛡️ AI PROPOSES. RISK DECIDES.</h3>
+            <p style="color: #94a3b8; font-size: 0.9em; margin-bottom: 20px;">Deterministic portfolio constraints cannot be overridden by the AI.</p>
+        """, unsafe_allow_html=True)
         draw_step("🛡️", "RISK ENGINE", "Deterministic portfolio rules decide whether the trade is allowed.", completed=False, failed=True)
         
         risk_cols = st.columns(2)
@@ -202,10 +209,17 @@ def _animate_risk_rejected():
         risk_cols[1].success("✓ RANK SCORE: 74/100")
         risk_cols[0].error(f"❌ HARD LIMIT FAILED: Sector exposure limit ({settings.MAX_SECTOR_EXPOSURE_PERCENT*100}%) exceeded")
         
+        st.markdown("</div>", unsafe_allow_html=True)
+        
         _delay()
-        st.error("🔴 **TRADE REJECTED**")
-        st.markdown("### THE AI WANTED TO TRADE. THE RISK ENGINE SAID NO.")
-        st.caption("The AI cannot override deterministic portfolio constraints. AI confidence ≠ permission to trade.")
+        
+        st.markdown("""
+        <div style="background-color: #450a0a; border-left: 6px solid #ef4444; padding: 25px; border-radius: 8px; text-align: center; margin: 30px 0;">
+            <h2 style="color: #ef4444; margin-top: 0; font-size: 2em; letter-spacing: 2px;">🔴 TRADE REJECTED</h2>
+            <h3 style="color: #f8fafc; font-size: 1.5em; margin: 15px 0;">THE AI WANTED TO TRADE.<br>THE RISK ENGINE SAID NO.</h3>
+            <p style="color: #fca5a5; font-size: 1.1em; margin-bottom: 0;">Deterministic portfolio constraints cannot be overridden by the AI.</p>
+        </div>
+        """, unsafe_allow_html=True)
         
         st.markdown("---")
         st.error("""
