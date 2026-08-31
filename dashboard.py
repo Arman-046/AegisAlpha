@@ -125,6 +125,8 @@ def dashboard_content():
     metric_cols[1].metric("Cash", f"${cash:,.2f}")
     metric_cols[2].metric("Buying Power", f"${buying_power:,.2f}")
     
+    daily_pnl = float(account.equity) - float(account.last_equity)
+    
     if daily_pnl == 0.0:
         metric_cols[3].metric("Daily P&L", "$0.00")
         metric_cols[3].caption("WHY? No qualifying trade has been approved during the current session.")
@@ -300,9 +302,9 @@ def dashboard_content():
     """, unsafe_allow_html=True)
 
 # Mode Toggle
-mode = st.radio("Environment", ["🔵 DEMO MODE", "🟢 LIVE PAPER"], horizontal=True, label_visibility="collapsed")
+mode = st.radio("Environment", ["DEMO MODE", "LIVE PAPER"], horizontal=True, label_visibility="collapsed")
 
-if mode == "🟢 LIVE PAPER":
+if mode == "LIVE PAPER":
     dashboard_content()
 else:
     from dashboard_demo import render_demo_dashboard
