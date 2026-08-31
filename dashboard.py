@@ -41,8 +41,8 @@ def load_memory():
             with open(memory_file, "r") as f:
                 return json.load(f)
         except:
-            return {"decisions": []}
-    return {"decisions": []}
+            return {"history": []}
+    return {"history": []}
 
 @st.fragment(run_every="60s")
 def dashboard_content():
@@ -99,6 +99,14 @@ def dashboard_content():
                 pass
         st.markdown(f"**Last Heartbeat:** {last_hb}", unsafe_allow_html=True)
 
+    if not market_open:
+        st.info("🌙 **MARKET CLOSED**\n\nAegisAlpha is connected and healthy.\nTrading is paused because the market is currently closed.\nThe agent will resume event-driven evaluation when the market opens.")
+
+    st.markdown("---")
+
+    st.subheader("Monitoring")
+    st.markdown(f"**📡 WATCHLIST:** {', '.join(settings.WATCHLIST)}\n\n**Monitoring Mode:** EVENT-DRIVEN")
+    
     st.markdown("---")
 
     # 2. ACCOUNT OVERVIEW & 3. PERFORMANCE
@@ -115,6 +123,9 @@ def dashboard_content():
     daily_pnl = float(account.equity) - float(account.last_equity)
     daily_pnl_pct = (daily_pnl / float(account.last_equity)) * 100 if float(account.last_equity) > 0 else 0
     metric_cols[3].metric("Daily P&L", f"${daily_pnl:,.2f}", f"{daily_pnl_pct:,.2f}%")
+    
+    if daily_pnl == 0.0:
+        st.info("🛡️ **NO-TRADE IS A DECISION**\n\n**WHY $0?**\nNo positions have been opened during the current session.\nAegisAlpha does not trade unless an opportunity passes its complete quality and risk pipeline.\nAn absence of orders does not mean the agent is inactive.\n\n*AI PROPOSES. DATA INFORMS. RISK GOVERNS. CODE EXECUTES.*")
 
     st.markdown("---")
 
@@ -159,21 +170,44 @@ def dashboard_content():
     st.markdown("---")
     
     # 5b. RECENT AGENT ACTIVITY (Memory)
-    st.subheader("Recent Agent Pipeline Activity")
-    decisions = memory.get("decisions", [])
+    st.subheader("Agent Pipeline Activity")
+    decisions = memory.get("history", [])
     if not decisions:
-        st.info("No recent agent activity recorded.")
+        st.info("No opportunity has been evaluated yet.\nThe agent is currently monitoring for its next event.")
     else:
+        last_decision = decisions[-1]
+        
+        st.markdown("### 🧠 CURRENT AGENT DECISION")
+        action = last_decision.get("action", "")
+        reason = last_decision.get("reason", "")
+        
+        if action == "EXECUTED":
+            st.success("🟢 TRADE APPROVED")
+        elif action == "VETOED" and "risk" in reason.lower():
+            st.error("🔴 TRADE REJECTED BY RISK ENGINE")
+            st.warning(f"**WHY NO TRADE?**\nRisk engine rejected the opportunity because a hard portfolio limit was exceeded.\n\n**Reason:** {reason}")
+        elif action == "VETOED":
+            st.warning("🟡 NO TRADE — OPPORTUNITY DID NOT QUALIFY")
+            st.info(f"**WHY NO TRADE?**\nOpportunity detected, but it failed quality or rank requirements.\n\n**Reason:** {reason}")
+        else:
+            st.info(f"🟡 WAITING — NO QUALIFYING EVENT\n\n**Reason:** {reason}")
+            
+        st.markdown("#### LAST EVALUATION")
+        st.markdown(f"**Symbol:** {last_decision.get('symbol')} | **Direction:** {last_decision.get('direction')} | **Confidence:** {last_decision.get('confidence', 0):.2f}")
+        st.markdown(f"**RESULT:** {action} | **REASON:** {reason}")
+        
+        st.markdown("---")
+        st.markdown("#### SESSION HISTORY")
         dec_data = []
         # show last 5
         for d in reversed(decisions[-5:]):
             dec_data.append({
-                "Timestamp": d.get("timestamp", "").replace("T", " ")[:19],
+                "Timestamp": d.get("timestamp", "").replace("T", " ")[:19] if d.get("timestamp") else "N/A",
                 "Symbol": d.get("symbol"),
                 "Direction": d.get("direction"),
                 "Confidence": f"{d.get('confidence', 0):.2f}",
                 "Action": d.get("action"),
-                "Rationale": d.get("rationale")
+                "Reason": d.get("reason")
             })
         st.dataframe(pd.DataFrame(dec_data), use_container_width=True, hide_index=True)
 
@@ -202,21 +236,39 @@ def dashboard_content():
     # 7. AGENT ARCHITECTURE
     st.subheader("Agent Architecture")
     st.markdown("""
-    ```mermaid
-    graph TD;
-        A[Market + News Events] --> B[Bull Agent / Bear Agent]
-        B --> C[Trader Synthesis]
-        C --> D[Volatility + Option Selection]
-        D --> E[Opportunity Ranking]
-        E --> F[Risk Manager]
-        F --> G[Deterministic Hard Limits]
-        G --> H[Alpaca Paper Execution]
-        H --> I[Autonomous Position Monitoring]
-    ```
-    """)
+    <div style="font-family: sans-serif; max-width: 600px;">
+        <div style="background-color: #1e293b; padding: 15px; border-radius: 8px; margin-bottom: 10px; text-align: center; border-left: 4px solid #3b82f6;">
+            <strong>📡 EVENT</strong><br><span style="color: #94a3b8;">Market + News</span>
+        </div>
+        <div style="text-align: center; color: #94a3b8; font-size: 20px; margin-bottom: 10px;">↓</div>
+        <div style="background-color: #1e293b; padding: 15px; border-radius: 8px; margin-bottom: 10px; text-align: center; border-left: 4px solid #8b5cf6;">
+            <strong>🧠 AI REASONING</strong><br><span style="color: #94a3b8;">Bull + Bear</span>
+        </div>
+        <div style="text-align: center; color: #94a3b8; font-size: 20px; margin-bottom: 10px;">↓</div>
+        <div style="background-color: #1e293b; padding: 15px; border-radius: 8px; margin-bottom: 10px; text-align: center; border-left: 4px solid #10b981;">
+            <strong>⚖️ TRADER</strong><br><span style="color: #94a3b8;">Decision</span>
+        </div>
+        <div style="text-align: center; color: #94a3b8; font-size: 20px; margin-bottom: 10px;">↓</div>
+        <div style="background-color: #1e293b; padding: 15px; border-radius: 8px; margin-bottom: 10px; text-align: center; border-left: 4px solid #f59e0b;">
+            <strong>🎯 OPPORTUNITY</strong><br><span style="color: #94a3b8;">Option + Ranking</span>
+        </div>
+        <div style="text-align: center; color: #94a3b8; font-size: 20px; margin-bottom: 10px;">↓</div>
+        <div style="background-color: #1e293b; padding: 15px; border-radius: 8px; margin-bottom: 10px; text-align: center; border-left: 4px solid #ef4444;">
+            <strong>🛡️ RISK ENGINE</strong><br><span style="color: #94a3b8;">Deterministic Controls</span>
+        </div>
+        <div style="text-align: center; color: #94a3b8; font-size: 20px; margin-bottom: 10px;">↓</div>
+        <div style="background-color: #1e293b; padding: 15px; border-radius: 8px; margin-bottom: 10px; text-align: center; border-left: 4px solid #14b8a6;">
+            <strong>⚡ EXECUTION</strong><br><span style="color: #94a3b8;">Alpaca Paper</span>
+        </div>
+        <div style="text-align: center; color: #94a3b8; font-size: 20px; margin-bottom: 10px;">↓</div>
+        <div style="background-color: #1e293b; padding: 15px; border-radius: 8px; margin-bottom: 10px; text-align: center; border-left: 4px solid #64748b;">
+            <strong>🔄 MONITOR</strong><br><span style="color: #94a3b8;">Position Management</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # Mode Toggle
-mode = st.radio("Environment", ["🟢 LIVE PAPER", "🔵 DEMO MODE"], horizontal=True, label_visibility="collapsed")
+mode = st.radio("Environment", ["🔵 DEMO MODE", "🟢 LIVE PAPER"], horizontal=True, label_visibility="collapsed")
 
 if mode == "🟢 LIVE PAPER":
     dashboard_content()

@@ -46,6 +46,7 @@ def render_demo_dashboard():
     # Portfolio Section at the bottom
     st.markdown("---")
     st.subheader("DEMO PORTFOLIO")
+    st.caption("SIMULATED — NOT REAL TRADING PERFORMANCE")
     colA, colB, colC = st.columns(3)
     colA.metric("Starting Equity", f"${demo_portfolio.start_equity:,.2f}")
     colB.metric("Simulated Cash", f"${demo_portfolio.cash:,.2f}")
@@ -80,34 +81,45 @@ def run_scenario(scenario: str):
     elif scenario == "RISK_REJECTED":
         _animate_risk_rejected()
 
+def draw_step(icon, title, desc, completed=True, failed=False):
+    if failed:
+        color = "#ef4444"
+        symbol = "❌"
+    else:
+        color = "#10b981" if completed else "#64748b"
+        symbol = "✓" if completed else "●"
+        
+    st.markdown(f"""
+    <div style="border-left: 3px solid {color}; padding-left: 15px; margin-bottom: 15px;">
+        <h4 style="margin: 0; color: {color}; font-size: 1.1em;">{symbol} {icon} {title}</h4>
+        <p style="margin: 5px 0 0 0; color: #cbd5e1; font-size: 0.95em;">{desc}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    if not (completed or failed):
+        _delay()
+
 def _animate_high_quality():
     st.subheader("LIVE PIPELINE TRACE")
     trace_area = st.container()
     
     with trace_area:
-        st.info("📡 **EVENT DETECTED:** NVDA moved sharply in a short period. AegisAlpha detected an event worth investigating.")
-        _delay()
-        st.info("📊 **DATA GATHERED:** Recent price history, volatility, volume and market information were collected.")
-        _delay()
-        st.info("🐂 **BULL ANALYST:** Potential upside: Momentum and volume support a bullish move.")
-        _delay()
-        st.info("🐻 **BEAR ANALYST:** Potential downside: Resistance and reversal risk could invalidate the setup.")
-        _delay()
-        st.info("⚖️ **TRADER:** Both arguments are considered. Bull case is stronger. Choosing Call direction.")
-        _delay()
-        st.info("🎯 **OPTION SELECTION:** Several contracts were filtered. A liquid 14 DTE contract with tight spread was selected.")
-        _delay()
-        st.success("🏆 **OPPORTUNITY RANK:** Score: 75/100 (Threshold: 60) ✓ Opportunity qualifies.")
-        _delay()
+        draw_step("📡", "EVENT DETECTED", "An unusual market movement was detected. AegisAlpha investigates before deciding whether to trade.")
+        draw_step("📊", "DATA GATHERED", "Price history, volatility, volume and market information are evaluated.")
+        draw_step("🐂", "BULL ANALYST", "Builds the strongest case for the trade.")
+        draw_step("🐻", "BEAR ANALYST", "Builds the strongest case against the trade.")
+        draw_step("⚖️", "TRADER", "Compares both perspectives and chooses a direction.")
+        draw_step("🎯", "OPTION SELECTION", "Filters contracts for quality, liquidity, DTE and spread.")
+        draw_step("🏆", "OPPORTUNITY RANK", f"Scores the opportunity against the configured quality threshold. Score: 75/100 (Threshold: {settings.MIN_RANK_SCORE_THRESHOLD})")
         
         # Risk engine
         st.markdown("### 🛡️ THE AI CAN RECOMMEND. THE RISK ENGINE DECIDES.")
         st.caption("LLM confidence does NOT override mathematical risk limits.")
+        draw_step("🛡️", "RISK ENGINE", "Deterministic portfolio rules decide whether the trade is allowed.")
         risk_cols = st.columns(2)
-        risk_cols[0].success("✓ Risk per trade limits OK")
-        risk_cols[1].success("✓ Sector exposure OK")
-        risk_cols[0].success("✓ Directional exposure OK")
-        risk_cols[1].success("✓ Position limits OK")
+        risk_cols[0].success(f"✓ Max trade risk: {settings.MAX_RISK_PERCENT*100}% OK")
+        risk_cols[1].success(f"✓ Sector exposure: {settings.MAX_SECTOR_EXPOSURE_PERCENT*100}% OK")
+        risk_cols[0].success(f"✓ Directional exposure: {settings.MAX_DIRECTIONAL_EXPOSURE_PERCENT*100}% OK")
+        risk_cols[1].success(f"✓ Min rank: {settings.MIN_RANK_SCORE_THRESHOLD} OK")
         _delay()
         
         symbol = "NVDA"
@@ -121,26 +133,22 @@ def _animate_high_quality():
                 equity=demo_portfolio.equity,
                 ask_price=5.50
             )
-            st.success(f"🟢 **TRADE APPROVED:** Risk approved. Simulated limit order for {qty} contracts submitted.")
-            _delay()
+            draw_step("⚡", "EXECUTION", "Only an approved opportunity can reach execution. Simulated limit order submitted.")
             
             engine = DemoExecutionEngine(demo_portfolio)
             order = engine.submit_limit_order(contract, qty, 5.40, 5.50, "BUY")
-            st.info("⚡ **EXECUTION:** Simulated limit order filled.")
-            _delay()
             
             demo_portfolio.simulate_exit(contract, 6.20)
-            st.info("🔄 **MONITOR:** Position monitored and profit target reached. Position closed.")
-            _delay()
+            draw_step("🔄", "MONITOR", "Approved positions are monitored according to the existing strategy. Profit target reached, position closed.")
             
-            st.success(f"💰 **RESULT:** SIMULATED P&L +${(6.20 - 5.45)*100*qty:,.2f}")
+            st.success(f"💰 **SIMULATED RESULT:** P&L +${(6.20 - 5.45)*100*qty:,.2f}")
             st.caption("SIMULATED RESULT — NOT REAL TRADING PERFORMANCE")
             
             st.markdown("---")
             st.info("""
             **WHAT JUST HAPPENED?**
             
-            AegisAlpha detected a market event. The Bull and Bear agents debated the opportunity. The Trader selected a direction. The opportunity scored 75/100. The deterministic risk engine approved the trade. A simulated limit order was executed. The position was monitored and exited.
+            AegisAlpha detected an event, evaluated opposing Bull and Bear arguments, selected an option, passed the opportunity threshold, passed deterministic risk checks, and simulated execution.
             
             **FINAL RESULT:** 🟢 SIMULATED TRADE COMPLETED
             """)
@@ -152,30 +160,23 @@ def _animate_low_quality():
     trace_area = st.container()
     
     with trace_area:
-        st.info("📡 **EVENT DETECTED:** TSLA earnings report released.")
-        _delay()
-        st.info("📊 **DATA GATHERED:** Pricing and macro conditions collected.")
-        _delay()
-        st.info("🐂 **BULL ANALYST:** Revenue beat, but margins tightening.")
-        _delay()
-        st.info("🐻 **BEAR ANALYST:** Price cuts are concerning.")
-        _delay()
-        st.info("⚖️ **TRADER:** Neutral/Bearish lean. Low confidence.")
-        _delay()
-        st.info("🎯 **OPTION SELECTION:** Spread is too wide, liquidity insufficient.")
-        _delay()
-        st.error("🏆 **OPPORTUNITY RANK:** Score: 45/100 (Threshold: 60) ❌ Opportunity fails.")
-        _delay()
+        draw_step("📡", "EVENT DETECTED", "An unusual market movement was detected. AegisAlpha investigates before deciding whether to trade.")
+        draw_step("📊", "DATA GATHERED", "Price history, volatility, volume and market information are evaluated.")
+        draw_step("🐂", "BULL ANALYST", "Builds the strongest case for the trade.")
+        draw_step("🐻", "BEAR ANALYST", "Builds the strongest case against the trade.")
+        draw_step("⚖️", "TRADER", "Compares both perspectives and chooses a direction.")
+        draw_step("🎯", "OPTION SELECTION", "Filters contracts for quality, liquidity, DTE and spread. Spread is too wide, liquidity insufficient.")
+        draw_step("🏆", "OPPORTUNITY RANK", f"Scores the opportunity against the configured quality threshold. Score: 45/100 (Minimum: {settings.MIN_RANK_SCORE_THRESHOLD})", completed=False, failed=True)
         
         st.warning("🟡 **NO TRADE**")
         
         st.markdown("---")
         st.warning("""
-        **WHY DIDN'T AEGISALPHA TRADE?**
-        
-        ❌ Poor Opportunity Rank.
-        
-        AegisAlpha does not trade simply because an event occurred. The risk/reward was unattractive, and the system preserved capital by passing on a low-quality setup. This demonstrates that NO-TRADE is an intentional decision.
+            **WHAT JUST HAPPENED?**
+            
+            AegisAlpha does not trade simply because an opportunity exists. The risk/reward was unattractive, and the system preserved capital by passing on a low-quality setup.
+            
+            **FINAL RESULT:** 🟡 NO TRADE
         """)
 
 def _animate_risk_rejected():
@@ -183,39 +184,34 @@ def _animate_risk_rejected():
     trace_area = st.container()
     
     with trace_area:
-        st.info("📡 **EVENT DETECTED:** AAPL product launch announcement detected.")
-        _delay()
-        st.info("📊 **DATA GATHERED:** Volatility and market context fetched.")
-        _delay()
-        st.info("🐂 **BULL ANALYST:** High conviction on new product cycle.")
-        _delay()
-        st.info("🐻 **BEAR ANALYST:** Disagrees on pricing power, but momentum is strong.")
-        _delay()
-        st.info("⚖️ **TRADER:** Both arguments considered. AI Confidence is extremely high (85%). Direction: Call.")
-        _delay()
-        st.info("🎯 **OPTION SELECTION:** Liquid contract selected.")
-        _delay()
-        st.success("🏆 **OPPORTUNITY RANK:** Score: 74/100 (Threshold: 60) ✓ Opportunity qualifies.")
-        _delay()
+        draw_step("📡", "EVENT DETECTED", "An unusual market movement was detected. AegisAlpha investigates before deciding whether to trade.")
+        draw_step("📊", "DATA GATHERED", "Price history, volatility, volume and market information are evaluated.")
+        draw_step("🐂", "BULL ANALYST", "Builds the strongest case for the trade.")
+        draw_step("🐻", "BEAR ANALYST", "Builds the strongest case against the trade.")
+        draw_step("⚖️", "TRADER", "Compares both perspectives and chooses a direction. AI CONFIDENCE: 85% ✓")
+        draw_step("🎯", "OPTION SELECTION", "Filters contracts for quality, liquidity, DTE and spread.")
+        draw_step("🏆", "OPPORTUNITY RANK", f"Scores the opportunity against the configured quality threshold. RANK SCORE: 74/100 ✓ (Minimum: {settings.MIN_RANK_SCORE_THRESHOLD})")
         
         # Risk engine
         st.markdown("### 🛡️ THE AI CAN RECOMMEND. THE RISK ENGINE DECIDES.")
         st.caption("LLM confidence does NOT override mathematical risk limits.")
+        draw_step("🛡️", "RISK ENGINE", "Deterministic portfolio rules decide whether the trade is allowed.", completed=False, failed=True)
+        
         risk_cols = st.columns(2)
-        risk_cols[0].success("✓ AI Confidence: 85%")
-        risk_cols[1].success("✓ Rank Score: 74/100")
-        risk_cols[0].error("❌ Sector exposure limit exceeded")
+        risk_cols[0].success("✓ AI CONFIDENCE: 85%")
+        risk_cols[1].success("✓ RANK SCORE: 74/100")
+        risk_cols[0].error(f"❌ HARD LIMIT FAILED: Sector exposure limit ({settings.MAX_SECTOR_EXPOSURE_PERCENT*100}%) exceeded")
         
         _delay()
         st.error("🔴 **TRADE REJECTED**")
-        st.markdown("## THE AI WANTED TO TRADE. THE RISK ENGINE SAID NO.")
-        st.caption("The AI cannot override deterministic portfolio constraints.")
+        st.markdown("### THE AI WANTED TO TRADE. THE RISK ENGINE SAID NO.")
+        st.caption("The AI cannot override deterministic portfolio constraints. AI confidence ≠ permission to trade.")
         
         st.markdown("---")
-        st.warning("""
-        **WHY DIDN'T AEGISALPHA TRADE?**
-        
-        ❌ Sector exposure limit exceeded.
-        
-        The opportunity itself was strong, but portfolio-level risk made the trade unacceptable. This visually demonstrates AegisAlpha's core philosophy: mathematical safety ALWAYS overrides LLM conviction.
+        st.error("""
+            **WHAT JUST HAPPENED?**
+            
+            AegisAlpha identified an opportunity, but the deterministic risk engine prevented execution because a hard constraint failed.
+            
+            **FINAL RESULT:** 🔴 TRADE REJECTED
         """)
