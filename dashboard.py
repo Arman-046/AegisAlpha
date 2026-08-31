@@ -399,53 +399,41 @@ def dashboard_content():
     
     st.markdown("""
     <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; background-color: #0f172a; padding: 30px; border-radius: 12px; border: 1px solid #1e293b;">
-        
         <div style="text-align: center; width: 100px;">
             <div style="font-size: 24px; margin-bottom: 8px;">📡</div>
             <div style="font-size: 0.75rem; font-weight: bold; color: #f8fafc;">EVENT</div>
             <div style="font-size: 0.65rem; color: #94a3b8;">Market/News</div>
         </div>
-        
         <div style="color: #475569; font-weight: bold;">→</div>
-        
         <div style="text-align: center; width: 100px;">
             <div style="font-size: 24px; margin-bottom: 8px;">🧠</div>
             <div style="font-size: 0.75rem; font-weight: bold; color: #f8fafc;">REASONING</div>
             <div style="font-size: 0.65rem; color: #94a3b8;">Bull ↔ Bear</div>
         </div>
-        
         <div style="color: #475569; font-weight: bold;">→</div>
-        
         <div style="text-align: center; width: 100px;">
             <div style="font-size: 24px; margin-bottom: 8px;">⚖️</div>
             <div style="font-size: 0.75rem; font-weight: bold; color: #f8fafc;">TRADER</div>
             <div style="font-size: 0.65rem; color: #94a3b8;">Decision</div>
         </div>
-        
         <div style="color: #475569; font-weight: bold;">→</div>
-        
         <div style="text-align: center; width: 100px;">
             <div style="font-size: 24px; margin-bottom: 8px;">🎯</div>
             <div style="font-size: 0.75rem; font-weight: bold; color: #f8fafc;">OPTION</div>
             <div style="font-size: 0.65rem; color: #94a3b8;">Rank Selection</div>
         </div>
-        
         <div style="color: #475569; font-weight: bold;">→</div>
-        
         <div style="text-align: center; width: 100px; padding: 10px; background-color: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px;">
             <div style="font-size: 24px; margin-bottom: 8px;">🛡️</div>
             <div style="font-size: 0.75rem; font-weight: bold; color: #ef4444;">RISK</div>
             <div style="font-size: 0.65rem; color: #fca5a5;">Deterministic</div>
         </div>
-        
         <div style="color: #475569; font-weight: bold;">→</div>
-        
         <div style="text-align: center; width: 100px;">
             <div style="font-size: 24px; margin-bottom: 8px;">⚡</div>
             <div style="font-size: 0.75rem; font-weight: bold; color: #f8fafc;">EXECUTE</div>
             <div style="font-size: 0.65rem; color: #94a3b8;">Alpaca Paper</div>
         </div>
-        
     </div>
     """, unsafe_allow_html=True)
     
