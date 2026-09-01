@@ -31,6 +31,7 @@ from execution.engine import ExecutionEngine, LivePaperExecutionEngine
 from execution.reconciliation import verify_order_state
 from positions.monitor import evaluate_and_exit_positions
 from app_logging.logger import get_logger
+from state.observability import obs
 
 from alpaca.data.live import StockDataStream, NewsDataStream
 from alpaca.trading.stream import TradingStream
@@ -47,6 +48,7 @@ async def process_symbol(symbol: str, open_positions: int, event_context: str = 
     """Processes a single symbol and returns an opportunity dict if valid."""
     log.info(f"Analyzing {symbol} (Event: {event_context})")
     
+    obs.update_stage("DATA", "PROCESSING")
     bars = fetch_stock_bars(symbol)
     news = fetch_news(symbol)
     
@@ -54,6 +56,9 @@ async def process_symbol(symbol: str, open_positions: int, event_context: str = 
     news_summary = f"{len(news)} recent articles" if news else "No news"
     vol_regime = calculate_realized_volatility_percentile(bars) if bars else "Normal"
     recent_context = memory.get_recent_context()
+    
+    obs.log_activity(f"Market data gathered for {symbol}. Volatility Regime: {vol_regime}")
+    obs.update_stage("DATA", "COMPLETED")
     
     # Run 4-role pipeline
     trader_decision, risk_decision = await evaluate_symbol_pipeline(
@@ -63,22 +68,32 @@ async def process_symbol(symbol: str, open_positions: int, event_context: str = 
     
     if not trader_decision:
         log.error(f"Pipeline failure for {symbol}. Evaluation aborted.")
-        memory.add_decision(symbol, "neutral", 0.0, "FAILED", "AI UNAVAILABLE: Anthropic API failure")
+        memory.add_decision(symbol, "neutral", 0.0, "FAILED", "AI UNAVAILABLE: Gemini API failure")
+        obs.set_terminal_state("AI UNAVAILABLE", "Gemini reasoning failed or returned empty.")
+        obs.log_error("AI", f"Gemini API failure during evaluation for {symbol}")
+        obs.increment_stat("ai_failures")
         return None
         
     if trader_decision.direction == "neutral":
         log.info(f"Trader passed on {symbol} (Neutral or below threshold)")
         memory.add_decision(symbol, "neutral", trader_decision.confidence, "PASSED", "No strong signal")
+        obs.set_terminal_state("WAITING FOR EVENT", f"Trader decided neutral ({trader_decision.confidence:.2f} confidence).")
+        obs.log_activity(f"Trader decided neutral for {symbol}")
         return None
         
     if not risk_decision or not risk_decision.approved:
         log.warning(f"Risk Manager vetoed {symbol} ({risk_decision.rationale if risk_decision else 'No response'})")
         memory.add_decision(symbol, trader_decision.direction, trader_decision.confidence, "VETOED", "Risk manager rejected")
+        obs.set_terminal_state("RISK REJECTED", f"Risk engine vetoed: {risk_decision.rationale if risk_decision else 'No response'}")
+        obs.log_activity(f"Risk engine vetoed {symbol}")
+        obs.increment_stat("risk_rejections")
         return None
         
     log.info(f"Signal for {symbol}: {trader_decision.direction} (Risk-Adjusted Conf: {risk_decision.adjusted_confidence})")
+    obs.log_activity(f"AI Decision: {trader_decision.direction.upper()} for {symbol}")
     
     # Contract Selection
+    obs.update_stage("OPTION", "PROCESSING")
     contracts = fetch_option_contracts(symbol)
     
     selected_contract, snapshot = select_contract_with_snapshot(contracts, trader_decision.direction)
@@ -86,11 +101,17 @@ async def process_symbol(symbol: str, open_positions: int, event_context: str = 
     if not selected_contract or not snapshot:
         log.info(f"No valid contract found for {symbol}")
         memory.add_decision(symbol, trader_decision.direction, risk_decision.adjusted_confidence, "NO_CONTRACT", "Filtered out deterministically")
+        obs.set_terminal_state("OPTION REJECTED", "Available option contracts did not meet configured requirements.")
+        obs.update_stage("OPTION", "FAILED")
         return None
         
     if not validate_option_snapshot(snapshot):
         log.info(f"Snapshot validation failed for {selected_contract}")
+        obs.set_terminal_state("OPTION REJECTED", "Option snapshot validation failed (e.g. wide spread).")
+        obs.update_stage("OPTION", "FAILED")
         return None
+        
+    obs.update_stage("OPTION", "COMPLETED")
         
     q = snapshot.latest_quote
     bid, ask = q.bid_price, q.ask_price
@@ -115,8 +136,11 @@ async def process_symbol(symbol: str, open_positions: int, event_context: str = 
     }
     
     # Rank candidate
+    obs.update_stage("RANK", "PROCESSING")
     ranked = rank_opportunities([opp])
     if not ranked:
+        obs.update_stage("RANK", "FAILED")
+        obs.set_terminal_state("OPPORTUNITY REJECTED", "Failed ranking evaluation.")
         return None
         
     final_opp = ranked[0]
@@ -126,13 +150,19 @@ async def process_symbol(symbol: str, open_positions: int, event_context: str = 
     if score < settings.MIN_RANK_SCORE_THRESHOLD:
         log.info(f"Rejected {symbol}: Rank Score {score:.2f} is below threshold {settings.MIN_RANK_SCORE_THRESHOLD}.")
         memory.add_decision(symbol, trader_decision.direction, risk_decision.adjusted_confidence, "RANK_REJECTED", f"Score {score:.2f} < threshold")
+        obs.set_terminal_state("OPPORTUNITY REJECTED", f"Rank score {score:.2f} is below minimum {settings.MIN_RANK_SCORE_THRESHOLD}.")
+        obs.update_stage("RANK", "FAILED")
+        obs.increment_stat("rank_rejections")
+        obs.log_activity(f"Opportunity for {symbol} rejected by ranking (Score: {score:.2f})")
         return None
         
+    obs.update_stage("RANK", "COMPLETED")
     log.info(f"Candidate {symbol} passed ranking threshold with score {score:.2f}.")
     return final_opp
 
 async def execute_opportunity(top_opp: dict, engine: ExecutionEngine = None, current_positions=None, current_loop_equity: float = None):
     try:
+        obs.update_stage("EXECUTE", "PROCESSING")
         if engine is None:
             engine = LivePaperExecutionEngine()
             
@@ -141,6 +171,8 @@ async def execute_opportunity(top_opp: dict, engine: ExecutionEngine = None, cur
             
         if not validate_max_open_positions(len(current_positions)):
             log.info("Max positions reached during execution loop. Stopping further executions.")
+            obs.update_stage("EXECUTE", "FAILED")
+            obs.set_terminal_state("RISK REJECTED", "Max open positions reached.")
             return
             
         log.info(f"Evaluating execution for candidate: {top_opp['contract']}")
@@ -171,11 +203,20 @@ async def execute_opportunity(top_opp: dict, engine: ExecutionEngine = None, cur
                 top_opp['symbol'], top_opp['direction'], 
                 top_opp['confidence'], "EXECUTED", top_opp['rationale']
             )
+            obs.update_stage("EXECUTE", "COMPLETED")
+            obs.update_stage("MONITOR", "COMPLETED")
+            obs.set_terminal_state("TRADE APPROVED", f"Executed order for {top_opp['contract']}")
+            obs.log_activity(f"Order submitted: {top_opp['contract']}")
+            obs.increment_stat("trades_approved")
+            obs.increment_stat("orders_submitted")
         else:
             memory.add_decision(
                 top_opp['symbol'], top_opp['direction'], 
                 top_opp['confidence'], "FAILED_EXECUTION", "Order rejected or failed"
             )
+            obs.update_stage("EXECUTE", "FAILED")
+            obs.set_terminal_state("FAILED EXECUTION", "Order rejected or failed.")
+            obs.log_error("EXECUTE", "Failed to submit Alpaca order.")
             
     except RiskRejection as e:
         log.warning(f"Risk Rejection for {top_opp['contract']}: {e}")
@@ -183,6 +224,9 @@ async def execute_opportunity(top_opp: dict, engine: ExecutionEngine = None, cur
             top_opp['symbol'], top_opp['direction'], 
             top_opp['confidence'], "RISK_REJECTED", str(e)
         )
+        obs.update_stage("EXECUTE", "FAILED")
+        obs.set_terminal_state("RISK REJECTED", f"Risk engine vetoed at execution: {e}")
+        obs.increment_stat("risk_rejections")
 
 async def trigger_pipeline(symbol: str, event_context: str):
     if symbol in in_progress_evals:
@@ -212,6 +256,8 @@ async def trigger_pipeline(symbol: str, event_context: str):
             return
             
         evals_this_hour[symbol].append(now)
+        
+        obs.start_evaluation(symbol, event_context)
         
         opp = await process_symbol(symbol, len(open_positions), event_context)
         if opp:
@@ -326,17 +372,10 @@ def start_streams():
 
 async def heartbeat_loop():
     """Background task to write agent status for the dashboard."""
-    status_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state", "system_status.json")
-    os.makedirs(os.path.dirname(status_file), exist_ok=True)
     while True:
         try:
-            status = {
-                "status": "RUNNING",
-                "last_heartbeat": datetime.now(timezone.utc).isoformat(),
-                "market_open": is_market_open(trading_client)
-            }
-            with open(status_file, "w") as f:
-                json.dump(status, f)
+            status = "RUNNING" if is_market_open(trading_client) else "MARKET CLOSED"
+            obs.heartbeat(status)
         except Exception as e:
             log.error(f"Error in heartbeat_loop: {e}")
         

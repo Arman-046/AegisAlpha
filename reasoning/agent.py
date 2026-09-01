@@ -22,6 +22,8 @@ from reasoning.prompts import (
     build_risk_prompt
 )
 
+from state.observability import obs
+
 log = get_logger(__name__)
 
 class AnalystDecision(BaseModel):
@@ -209,6 +211,8 @@ async def evaluate_symbol_pipeline(symbol: str, bars_summary: str, news_summary:
     
     # 1. Concurrent Bull and Bear
     log.info(f"[{symbol}] Starting concurrent Bull and Bear Analyst evaluation with Gemini...")
+    obs.update_stage("BULL", "PROCESSING")
+    obs.update_stage("BEAR", "PROCESSING")
     bull_task = asyncio.create_task(_run_analyst(symbol, analyst_prompt, BULL_SYSTEM_PROMPT))
     bear_task = asyncio.create_task(_run_analyst(symbol, analyst_prompt, BEAR_SYSTEM_PROMPT))
     
@@ -217,32 +221,45 @@ async def evaluate_symbol_pipeline(symbol: str, bars_summary: str, news_summary:
         log.info(f"[{symbol}] Concurrent evaluation complete. Bull Conf: {bull_decision.confidence if bull_decision else None}, Bear Conf: {bear_decision.confidence if bear_decision else None}")
     except Exception as e:
         log.warning(f"Failed to get analyst decisions for {symbol} due to error: {e}")
+        obs.update_stage("BULL", "FAILED")
+        obs.update_stage("BEAR", "FAILED")
         return None, None
     
     if not bull_decision or not bear_decision:
         log.warning(f"Failed to get analyst decisions for {symbol}")
+        obs.update_stage("BULL", "FAILED")
+        obs.update_stage("BEAR", "FAILED")
         return None, None
+        
+    obs.update_stage("BULL", "COMPLETED")
+    obs.update_stage("BEAR", "COMPLETED")
         
     bull_arg = f"Conf: {bull_decision.confidence}, Rationale: {bull_decision.rationale}"
     bear_arg = f"Conf: {bear_decision.confidence}, Rationale: {bear_decision.rationale}"
     
     # 2. Synthesize via Trader
+    obs.update_stage("TRADER", "PROCESSING")
     trader_prompt = build_trader_prompt(symbol, bull_arg, bear_arg, recent_context, threshold)
     try:
         trader_decision = await _run_trader(symbol, trader_prompt)
+        obs.update_stage("TRADER", "COMPLETED")
     except Exception as e:
         log.warning(f"Trader failed for {symbol}: {e}")
+        obs.update_stage("TRADER", "FAILED")
         return None, None
     
     if not trader_decision or trader_decision.direction == "neutral" or trader_decision.confidence < threshold:
         return trader_decision, None
         
     # 3. Risk Manager Validation
+    obs.update_stage("RISK", "PROCESSING")
     risk_prompt = build_risk_prompt(symbol, trader_decision.direction, trader_decision.confidence, vol_regime, open_positions)
     try:
         risk_decision = await _run_risk_manager(symbol, risk_prompt)
+        obs.update_stage("RISK", "COMPLETED")
     except Exception as e:
         log.warning(f"Risk manager failed for {symbol}: {e}")
+        obs.update_stage("RISK", "FAILED")
         return trader_decision, None
     
     return trader_decision, risk_decision

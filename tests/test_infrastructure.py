@@ -22,7 +22,7 @@ def mock_fetchers():
         yield
 
 @pytest.mark.asyncio
-async def test_anthropic_failure_returns_failed(memory_mock, mock_fetchers):
+async def test_gemini_failure_returns_failed(memory_mock, mock_fetchers):
     from main import process_symbol
     
     # Mock evaluate_symbol_pipeline to return (None, None) simulating API failure
@@ -35,7 +35,7 @@ async def test_anthropic_failure_returns_failed(memory_mock, mock_fetchers):
         
         assert result is None
         memory_mock.add_decision.assert_called_once_with(
-            "AAPL", "neutral", 0.0, "FAILED", "AI UNAVAILABLE: Anthropic API failure"
+            "AAPL", "neutral", 0.0, "FAILED", "AI UNAVAILABLE: Gemini API failure"
         )
 
 @pytest.mark.asyncio
