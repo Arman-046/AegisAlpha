@@ -110,6 +110,37 @@ st.markdown("""
     }
     .tag-active { border-color: #10b981; color: #10b981; }
     
+    /* Active Monitoring Animations */
+    .node-listening { 
+        background-color: rgba(56, 189, 248, 0.1); 
+        color: #38bdf8; 
+        border: 2px solid rgba(56, 189, 248, 0.3); 
+        animation: listenPulse 2s ease-in-out infinite; 
+    }
+    
+    @keyframes listenPulse {
+        0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.4); border-color: rgba(56, 189, 248, 0.8); }
+        50% { box-shadow: 0 0 0 8px rgba(56, 189, 248, 0); border-color: rgba(56, 189, 248, 0.2); }
+        100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); border-color: rgba(56, 189, 248, 0.8); }
+    }
+
+    .blinking-dot {
+        animation: breathe 2s infinite alternate;
+    }
+    @keyframes breathe {
+        0% { opacity: 0.3; text-shadow: none; }
+        100% { opacity: 1; text-shadow: 0 0 8px #10b981; }
+    }
+
+    .blinking-cursor {
+        animation: blink 1s step-end infinite;
+        color: #38bdf8;
+    }
+    @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+    }
+    
     /* Mobile responsive pipeline */
     @media (max-width: 768px) {
         .pipeline-container { flex-direction: column; align-items: flex-start; }
@@ -208,7 +239,9 @@ with col1:
         </div>
         
         <div style="border-top: 1px solid #1e293b; padding-top: 16px; margin-bottom: 8px; color: #f8fafc; font-weight: 600; font-size: 1.1rem;">
-            Activity: <span style="color: #38bdf8;">{obs.get('last_terminal_state', {}).get('status', 'WAITING FOR EVENT') if obs else 'WAITING'}</span>
+            Activity: <span style="color: #38bdf8;">
+            {'Monitoring Market Data Streams <span class="blinking-cursor">█</span>' if obs and obs.get('last_terminal_state', {}).get('status') == 'WAITING FOR EVENT' else obs.get('last_terminal_state', {}).get('status', 'Monitoring Market Data Streams <span class="blinking-cursor">█</span>') if obs else 'Monitoring Market Data Streams <span class="blinking-cursor">█</span>'}
+            </span>
         </div>
         <div style="font-size: 0.85rem; color: #64748b;">
             Last heartbeat: {format_time(hb_time)} ({time_ago(hb_time)})
@@ -229,7 +262,7 @@ with col2:
     
     tags_html = ""
     for s in settings.WATCHLIST:
-        tags_html += f"<span class='tag tag-active'>{s} ●</span>"
+        tags_html += f"<span class='tag tag-active'>{s} <span class='blinking-dot'>●</span></span>"
     st.markdown((html_content + tags_html + "</div>").replace('\n', ''), unsafe_allow_html=True)
 
 # 2. INTELLIGENT WATCHLIST
@@ -319,16 +352,20 @@ st.markdown("### LIVE DECISION PIPELINE")
 pipeline = obs.get("pipeline", {}) if obs else {}
 stages = ["EVENT", "DATA", "BULL", "BEAR", "TRADER", "OPTION", "RANK", "RISK", "EXECUTE", "MONITOR"]
 
-def get_node_class_and_icon(status):
+global_status = obs.get("last_terminal_state", {}).get("status", "") if obs else ""
+
+def get_node_class_and_icon(status, stage, global_status):
     if status == "COMPLETED": return "node-completed", "✓"
     if status == "PROCESSING": return "node-processing", "◐"
     if status == "FAILED": return "node-failed", "✕"
+    if stage == "EVENT" and global_status == "WAITING FOR EVENT":
+        return "node-listening", "⚡"
     return "node-waiting", "○"
 
 nodes_html = "<div class='premium-card'><div class='pipeline-container'>"
 for i, stage in enumerate(stages):
     status = pipeline.get(stage, "WAITING")
-    n_class, n_icon = get_node_class_and_icon(status)
+    n_class, n_icon = get_node_class_and_icon(status, stage, global_status)
     nodes_html += f"""
     <div class="pipeline-node">
         <div class="node-circle {n_class}">{n_icon}</div>
