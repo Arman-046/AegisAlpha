@@ -12,6 +12,7 @@ env/
 
 state/memory.json
 state/system_status.json
+state/observability.json
 logs/
 *.log
 
