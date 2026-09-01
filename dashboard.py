@@ -155,7 +155,7 @@ st.markdown("""
     <h1 style="margin-bottom: 0; color: #38bdf8; font-weight: 800; letter-spacing: 2px;">AEGISALPHA</h1>
     <p style="color: #94a3b8; font-size: 1.1rem; margin-top: 0.5rem; text-transform: uppercase; letter-spacing: 1px;">Autonomous Event-Driven AI Trading</p>
 </div>
-""", unsafe_allow_html=True)
+""".replace('\n', ''), unsafe_allow_html=True)
 
 # 1. WHAT IS AEGISALPHA DOING RIGHT NOW?
 col1, col2 = st.columns([2, 1])
@@ -184,7 +184,7 @@ with col1:
     ai_status = obs.get("ai_provider_status", "AVAILABLE") if obs else "AVAILABLE"
     ai_color = "#10b981" if ai_status == "AVAILABLE" else "#ef4444"
     
-    st.markdown(f"""
+    html_content = f"""
     <div class="premium-card">
         <div style="font-weight: 800; margin-bottom: 24px; color: {'#3b82f6' if is_demo else '#10b981'}; font-size: 1.1rem;">{env_badge}</div>
         
@@ -214,22 +214,23 @@ with col1:
             Last heartbeat: {format_time(hb_time)} ({time_ago(hb_time)})
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """
+    st.markdown(html_content.replace('\n', ''), unsafe_allow_html=True)
 
 with col2:
     st.markdown("### 📡 MONITORING")
-    st.markdown("""
+    html_content = """
     <div class="premium-card" style="height: 310px;">
         <div style="font-size: 0.95rem; color: #94a3b8; margin-bottom: 24px; line-height: 1.5;">
             Mode: <strong style="color: #38bdf8;">EVENT-DRIVEN</strong><br><br>
             The agent continuously monitors configured market data streams. The AI reasoning pipeline is invoked <strong>only</strong> when the event detector identifies a qualifying volatility event or breaking news.
         </div>
-    """, unsafe_allow_html=True)
+    """
     
     tags_html = ""
     for s in settings.WATCHLIST:
         tags_html += f"<span class='tag tag-active'>{s} ●</span>"
-    st.markdown(tags_html + "</div>", unsafe_allow_html=True)
+    st.markdown((html_content + tags_html + "</div>").replace('\n', ''), unsafe_allow_html=True)
 
 # 2. LIVE PIPELINE VISUALIZATION
 st.markdown("### LIVE DECISION PIPELINE")
@@ -257,7 +258,7 @@ for i, stage in enumerate(stages):
         nodes_html += """<div class="arrow" style="color: #334155; font-size: 20px; font-weight: bold; margin-bottom: 20px;">→</div>"""
 nodes_html += "</div></div>"
 
-st.markdown(nodes_html, unsafe_allow_html=True)
+st.markdown(nodes_html.replace('\n', ''), unsafe_allow_html=True)
 
 # 3. CURRENT EVALUATION & WHY DIDN'T IT TRADE?
 col3, col4 = st.columns(2)
@@ -271,13 +272,13 @@ with col3:
             <h2 style="color: #38bdf8; margin-top: 0; font-size: 2.5rem; margin-bottom: 4px;">{sym}</h2>
             <div style="color: #f1f5f9; font-size: 1.1rem; line-height: 1.5; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;">{evt}</div>
         </div>
-        """, unsafe_allow_html=True)
+        """.replace('\n', ''), unsafe_allow_html=True)
     else:
         st.markdown("""
         <div class="premium-card" style="height: 180px; display: flex; align-items: center; justify-content: center;">
             <div style="color: #94a3b8; font-style: italic; font-size: 1.2rem;">Waiting for first evaluation...</div>
         </div>
-        """, unsafe_allow_html=True)
+        """.replace('\n', ''), unsafe_allow_html=True)
 
 with col4:
     st.markdown("### OUTCOME / REASON")
@@ -295,7 +296,7 @@ with col4:
         <h3 style="color: {t_color}; margin-top: 0; font-size: 1.6rem;">{t_status}</h3>
         <div style="color: #cbd5e1; font-size: 1.1rem; line-height: 1.5;">{t_reason}</div>
     </div>
-    """, unsafe_allow_html=True)
+    """.replace('\n', ''), unsafe_allow_html=True)
 
 # 4. ACTIVITY & ERRORS
 col5, col6 = st.columns(2)
@@ -311,7 +312,7 @@ with col5:
             msg = a.get("message", "")
             act_html += f"<div style='margin-bottom: 12px; border-bottom: 1px solid #1e293b; padding-bottom: 8px;'><span style='color: #38bdf8; font-family: monospace; font-size: 0.85rem; margin-right: 12px;'>{ts}</span> <span style='color: #f1f5f9;'>{msg}</span></div>"
         act_html += "</div>"
-        st.markdown(act_html, unsafe_allow_html=True)
+        st.markdown(act_html.replace('\n', ''), unsafe_allow_html=True)
 
 with col6:
     st.markdown("### SYSTEM HEALTH & ERRORS")
@@ -332,7 +333,7 @@ with col6:
             </div>
             """
         err_html += "</div>"
-        st.markdown(err_html, unsafe_allow_html=True)
+        st.markdown(err_html.replace('\n', ''), unsafe_allow_html=True)
 
 # 5. SESSION STATS & P&L
 col7, col8 = st.columns(2)
@@ -360,7 +361,7 @@ with col7:
             </div>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """.replace('\n', ''), unsafe_allow_html=True)
 
 with col8:
     st.markdown("### PORTFOLIO & P&L")
@@ -377,7 +378,7 @@ with col8:
                     AegisAlpha does not create trades simply to generate performance. Capital is deployed only after an opportunity passes the complete decision and deterministic risk pipeline.
                 </div>
             </div>
-            """, unsafe_allow_html=True)
+            """.replace('\n', ''), unsafe_allow_html=True)
         except:
             st.markdown("<div class='premium-card' style='color:#ef4444'>Failed to fetch Alpaca account</div>", unsafe_allow_html=True)
     else:
@@ -390,4 +391,4 @@ with col8:
                 AegisAlpha does not create trades simply to generate performance.
             </div>
         </div>
-        """, unsafe_allow_html=True)
+        """.replace('\n', ''), unsafe_allow_html=True)
