@@ -90,12 +90,12 @@ def test_event_detector_polling():
         
         # 2. Second bar with small move, no trigger
         loop.run_until_complete(handle_bar(DummyBarSmallMove()))
-        assert price_cache["AAPL"] == 150.1
+        assert price_cache["AAPL"] == 150.0 # Anchor price does not update on small move
         mock_run.assert_not_called()
         
         # 3. Third bar with big move, should trigger
         loop.run_until_complete(handle_bar(DummyBarBigMove()))
-        assert price_cache["AAPL"] == 155.0
+        assert price_cache["AAPL"] == 155.0 # Updates on trigger
         assert mock_run.call_count == 1
         
     loop.close()
@@ -130,6 +130,6 @@ def test_event_detector_no_polling():
         
         # Ensure it didn't trigger
         mock_run.assert_not_called()
-        assert price_cache["AAPL"] == 100.1
+        assert price_cache["AAPL"] == 100.0 # Anchor price remains unchanged
         
     loop.close()

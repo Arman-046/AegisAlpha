@@ -285,8 +285,7 @@ async def handle_bar(bar):
             if change >= 0.005:
                 pass # Significant move, proceed
             else:
-                price_cache[symbol] = price
-                return
+                return # Do NOT update anchor price! Keep accumulating drift.
         else:
             price_cache[symbol] = price
             return
