@@ -61,9 +61,14 @@ async def process_symbol(symbol: str, open_positions: int, event_context: str = 
         memory.current_confidence_threshold, open_positions, event_context
     )
     
-    if not trader_decision or trader_decision.direction == "neutral":
+    if not trader_decision:
+        log.error(f"Pipeline failure for {symbol}. Evaluation aborted.")
+        memory.add_decision(symbol, "neutral", 0.0, "FAILED", "AI UNAVAILABLE: Anthropic API failure")
+        return None
+        
+    if trader_decision.direction == "neutral":
         log.info(f"Trader passed on {symbol} (Neutral or below threshold)")
-        memory.add_decision(symbol, "neutral", 0.0, "PASSED", "No strong signal")
+        memory.add_decision(symbol, "neutral", trader_decision.confidence, "PASSED", "No strong signal")
         return None
         
     if not risk_decision or not risk_decision.approved:
@@ -234,13 +239,11 @@ async def handle_bar(bar):
             if change >= 0.005:
                 pass # Significant move, proceed
             else:
-                if symbol in last_eval_time and now - last_eval_time[symbol] < 900:
-                    price_cache[symbol] = price
-                    return
-        else:
-            if symbol in last_eval_time and now - last_eval_time[symbol] < 900:
                 price_cache[symbol] = price
                 return
+        else:
+            price_cache[symbol] = price
+            return
                     
         price_cache[symbol] = price
         last_eval_time[symbol] = now

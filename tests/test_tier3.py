@@ -25,20 +25,20 @@ def setup_teardown():
 @pytest.mark.asyncio
 async def test_handle_bar_rate_limit():
     with patch("main.asyncio.run_coroutine_threadsafe") as mock_run:
-        # First bar should trigger
+        # First bar should ONLY cache, NOT trigger
         bar1 = MockBar("AAPL", 150.0)
         await handle_bar(bar1)
-        assert mock_run.call_count == 1
+        assert mock_run.call_count == 0
         
-        # Second bar immediately after should NOT trigger (throttled by time and <0.5% price change)
-        bar2 = MockBar("AAPL", 150.0)
+        # Second bar immediately after with < 0.5% change should NOT trigger
+        bar2 = MockBar("AAPL", 150.1)
         await handle_bar(bar2)
-        assert mock_run.call_count == 1
+        assert mock_run.call_count == 0
         
-        # Third bar with 1% price change SHOULD trigger despite time throttle
+        # Third bar with > 0.5% price change SHOULD trigger
         bar3 = MockBar("AAPL", 151.5)
         await handle_bar(bar3)
-        assert mock_run.call_count == 2
+        assert mock_run.call_count == 1
 
 @pytest.mark.asyncio
 async def test_handle_news_rate_limit():

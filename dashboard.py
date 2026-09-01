@@ -209,12 +209,17 @@ def dashboard_content():
         </div>
         """, unsafe_allow_html=True)
     with activity_col4:
-        evals = len(decisions)
+        events = len(decisions)
+        failed = len([d for d in decisions if d.get("action") == "FAILED"])
+        completed = len([d for d in decisions if d.get("action") not in ["FAILED", "NO_CONTRACT"]])
         st.markdown(f"""
         <div class="premium-card" style="padding: 16px; text-align: center;">
-            <div class="metric-label">Session Evaluations</div>
-            <div class="metric-value" style="font-size: 1.5rem;">{evals}</div>
-            <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 8px;">Opportunities Evaluated</div>
+            <div class="metric-label">Pipeline Metrics</div>
+            <div style="font-size: 0.85rem; color: #cbd5e1; margin-top: 8px; text-align: left;">
+                Events Detected: <span style="color: #f8fafc; font-weight: bold; float: right;">{events if events else 'Not yet recorded'}</span><br>
+                Evals Completed: <span style="color: #10b981; font-weight: bold; float: right;">{completed if events else 'Not yet recorded'}</span><br>
+                Evals Failed: <span style="color: #ef4444; font-weight: bold; float: right;">{failed if events else 'Not yet recorded'}</span>
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -260,7 +265,16 @@ def dashboard_content():
                 reason = last_decision.get("reason", "")
                 sym = last_decision.get("symbol", "UNKNOWN")
                 
-                if action == "VETOED" and "risk" in reason.lower():
+                if action == "FAILED":
+                    st.markdown(f"""
+                    <div class="premium-card" style="border-left: 4px solid #ef4444;">
+                        <h3 style="margin-top:0; color: #ef4444; display: flex; align-items: center;"><span style="font-size: 1.5rem; margin-right: 12px;">🚨</span> AI UNAVAILABLE</h3>
+                        <p style="color: #e2e8f0; font-size: 1.1em; margin-bottom: 5px;"><strong>Evaluated:</strong> {sym}</p>
+                        <p style="color: #f8fafc; font-size: 1.1em; margin-bottom: 12px; border-left: 2px solid #ef4444; padding-left: 10px;">{reason}</p>
+                        <p style="color: #94a3b8; font-size: 0.9em; margin: 0;">Pipeline evaluation aborted. The system has safely returned to monitoring.</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                elif action == "VETOED" and "risk" in reason.lower():
                     st.markdown(f"""
                     <div class="premium-card" style="border-left: 4px solid #ef4444;">
                         <h3 style="margin-top:0; color: #ef4444; display: flex; align-items: center;"><span style="font-size: 1.5rem; margin-right: 12px;">🔴</span> RISK ENGINE REJECTED</h3>
@@ -304,8 +318,21 @@ def dashboard_content():
             reason = d.get("reason", "")
             conf = d.get("confidence", 0)
             
-            outcome_color = "#10b981" if action == "EXECUTED" else ("#ef4444" if "risk" in reason.lower() else "#f59e0b")
-            outcome_text = "TRADE EXECUTED" if action == "EXECUTED" else ("RISK REJECTED" if "risk" in reason.lower() else "NO TRADE")
+            if action == "FAILED":
+                outcome_color = "#ef4444"
+                outcome_text = "AI UNAVAILABLE"
+            elif action == "EXECUTED":
+                outcome_color = "#10b981"
+                outcome_text = "TRADE EXECUTED"
+            elif "risk" in reason.lower():
+                outcome_color = "#ef4444"
+                outcome_text = "RISK REJECTED"
+            elif action == "RANK_REJECTED":
+                outcome_color = "#f59e0b"
+                outcome_text = "RANKING REJECTED"
+            else:
+                outcome_color = "#f59e0b"
+                outcome_text = "NO TRADE"
             
             st.markdown(f"""
             <div style="display: flex; margin-bottom: 12px; padding: 12px; background-color: #111827; border-radius: 8px; border-left: 3px solid {outcome_color};">
