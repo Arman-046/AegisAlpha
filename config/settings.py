@@ -7,10 +7,10 @@ class Settings(BaseSettings):
     # API Keys
     APCA_API_KEY_ID: str = Field(..., description="Alpaca Paper API Key")
     APCA_API_SECRET_KEY: str = Field(..., description="Alpaca Paper API Secret")
-    ANTHROPIC_API_KEY: str = Field(..., description="Anthropic API Key")
+    GEMINI_API_KEY: str = Field(..., description="Google Gemini API Key")
     
     # Model
-    ANTHROPIC_MODEL_ID: str = Field(default="claude-3-5-sonnet-20240620", description="Claude Model ID")
+    GEMINI_MODEL: str = Field(default="gemini-2.5-flash", description="Gemini Model ID")
     
     # Paper Trading Safety
     PAPER: bool = Field(default=True, description="Must be true for paper trading")

@@ -201,11 +201,13 @@ def dashboard_content():
         </div>
         """, unsafe_allow_html=True)
     with activity_col3:
+        ai_status = "UNAVAILABLE" if decisions and decisions[-1].get("action") == "FAILED" else "AVAILABLE"
+        ai_color = "#ef4444" if ai_status == "UNAVAILABLE" else "#10b981"
         st.markdown(f"""
         <div class="premium-card" style="padding: 16px; text-align: center;">
-            <div class="metric-label">Monitoring Mode</div>
-            <div class="metric-value" style="font-size: 1.2rem; color: #60a5fa; margin-top: 6px;">EVENT-DRIVEN</div>
-            <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 8px;">Waiting for next trigger</div>
+            <div class="metric-label">AI Engine</div>
+            <div class="metric-value" style="font-size: 1.2rem; color: {ai_color}; margin-top: 6px;">{ai_status}</div>
+            <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 8px;">Provider: GEMINI</div>
         </div>
         """, unsafe_allow_html=True)
     with activity_col4:

@@ -7,7 +7,7 @@ def test_valid_settings():
     s = Settings(
         APCA_API_KEY_ID="test_key",
         APCA_API_SECRET_KEY="test_secret",
-        ANTHROPIC_API_KEY="test_anthropic",
+        GEMINI_API_KEY="test_anthropic",
         PAPER=True,
         MAX_RISK_PERCENT=0.02,
         BASE_MIN_CONFIDENCE=0.65,
@@ -24,7 +24,7 @@ def test_invalid_paper_trading():
         Settings(
             APCA_API_KEY_ID="test",
             APCA_API_SECRET_KEY="test",
-            ANTHROPIC_API_KEY="test",
+            GEMINI_API_KEY="test",
             PAPER=False  # Should fail
         )
     assert "PAPER must be True" in str(exc_info.value)
@@ -34,7 +34,7 @@ def test_negative_risk_rejected():
         Settings(
             APCA_API_KEY_ID="test",
             APCA_API_SECRET_KEY="test",
-            ANTHROPIC_API_KEY="test",
+            GEMINI_API_KEY="test",
             MAX_RISK_PERCENT=-0.01
         )
     assert "MAX_RISK_PERCENT must be > 0 and <= 0.05" in str(exc_info.value)
@@ -44,7 +44,7 @@ def test_excessive_risk_rejected():
         Settings(
             APCA_API_KEY_ID="test",
             APCA_API_SECRET_KEY="test",
-            ANTHROPIC_API_KEY="test",
+            GEMINI_API_KEY="test",
             MAX_RISK_PERCENT=0.06 # Over hard cap of 5%
         )
     assert "MAX_RISK_PERCENT must be > 0 and <= 0.05" in str(exc_info.value)
@@ -54,7 +54,7 @@ def test_out_of_bounds_confidence():
         Settings(
             APCA_API_KEY_ID="test",
             APCA_API_SECRET_KEY="test",
-            ANTHROPIC_API_KEY="test",
+            GEMINI_API_KEY="test",
             BASE_MIN_CONFIDENCE=1.5 # Invalid
         )
     assert "BASE_MIN_CONFIDENCE must be between 0 and 1" in str(exc_info.value)
@@ -64,7 +64,7 @@ def test_dte_validation():
         Settings(
             APCA_API_KEY_ID="test",
             APCA_API_SECRET_KEY="test",
-            ANTHROPIC_API_KEY="test",
+            GEMINI_API_KEY="test",
             MIN_DTE=30,
             MAX_DTE=10 # Invalid, less than MIN_DTE
         )

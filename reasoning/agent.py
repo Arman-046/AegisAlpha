@@ -4,8 +4,12 @@ from pydantic import BaseModel, Field, ValidationError
 from typing import Literal, Tuple, Any
 from config.settings import settings
 from app_logging.logger import get_logger
-from tenacity import retry, wait_exponential, stop_after_attempt
-import anthropic
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception
+import traceback
+
+from google import genai
+from google.genai import types
+
 from mcp_tools.alpaca_mcp import ALPACA_MCP_TOOLS, mcp_client
 
 from reasoning.prompts import (
@@ -40,102 +44,159 @@ def get_async_client():
     global _async_client
     if _async_client is None:
         try:
-            _async_client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-        except Exception:
-            pass
+            if settings.GEMINI_API_KEY:
+                _async_client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        except Exception as e:
+            log.error(f"Failed to initialize Gemini Client: {e}")
     return _async_client
 
-def _extract_json(raw_text: str) -> dict:
-    if raw_text.startswith("```json"):
-        raw_text = raw_text.replace("```json", "", 1)
-    if raw_text.startswith("```"):
-        raw_text = raw_text.replace("```", "", 1)
-    if raw_text.endswith("```"):
-        raw_text = raw_text[:-3]
-    return json.loads(raw_text.strip())
+def is_transient_error(e: Exception) -> bool:
+    err_str = str(e).lower()
+    if "400" in err_str or "401" in err_str or "403" in err_str or "404" in err_str:
+        return False
+    return True
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=False, retry_error_callback=lambda rs: None)
+def get_gemini_tools() -> list:
+    """Translates ALPACA_MCP_TOOLS to Gemini FunctionDeclarations"""
+    gemini_funcs = []
+    for t in ALPACA_MCP_TOOLS:
+        props = t.get("input_schema", {}).get("properties", {})
+        required = t.get("input_schema", {}).get("required", [])
+        
+        gemini_props = {}
+        for k, v in props.items():
+            type_str = v.get("type", "string").upper()
+            gemini_props[k] = types.Schema(
+                type=getattr(types.Type, type_str, types.Type.STRING),
+                description=v.get("description", "")
+            )
+            
+        func_decl = types.FunctionDeclaration(
+            name=t["name"],
+            description=t["description"],
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties=gemini_props,
+                required=required
+            ) if gemini_props else None
+        )
+        gemini_funcs.append(func_decl)
+    return [types.Tool(function_declarations=gemini_funcs)]
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception(is_transient_error), reraise=False, retry_error_callback=lambda rs: None)
 async def _run_analyst(symbol: str, prompt: str, system_prompt: str) -> AnalystDecision | None:
     client = get_async_client()
     if not client: return None
     try:
-        res = await client.messages.create(
-            model=settings.ANTHROPIC_MODEL_ID,
-            max_tokens=300,
-            system=system_prompt,
-            messages=[{"role": "user", "content": prompt}]
+        res = await client.aio.models.generate_content(
+            model=settings.GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                response_mime_type="application/json",
+                response_schema=AnalystDecision,
+                temperature=0.0
+            )
         )
-        data = _extract_json(res.content[0].text)
+        if not res.text:
+            raise ValueError("Empty response from Gemini")
+        data = json.loads(res.text)
         return AnalystDecision(**data)
     except Exception as e:
         log.warning(f"Analyst error for {symbol}: {e}")
         raise e
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=False, retry_error_callback=lambda rs: None)
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception(is_transient_error), reraise=False, retry_error_callback=lambda rs: None)
 async def _run_trader(symbol: str, prompt: str) -> TraderDecision | None:
     client = get_async_client()
     if not client: return None
     try:
-        messages = [{"role": "user", "content": prompt}]
-        # Trader has access to MCP tools
-        res = await client.messages.create(
-            model=settings.ANTHROPIC_MODEL_ID,
-            max_tokens=400,
-            system=TRADER_SYSTEM_PROMPT,
-            messages=messages,
-            tools=ALPACA_MCP_TOOLS
+        messages = [{"role": "user", "parts": [types.Part.from_text(text=prompt)]}]
+        
+        config = types.GenerateContentConfig(
+            system_instruction=TRADER_SYSTEM_PROMPT,
+            tools=get_gemini_tools(),
+            temperature=0.0
+        )
+        
+        res = await client.aio.models.generate_content(
+            model=settings.GEMINI_MODEL,
+            contents=messages,
+            config=config
         )
         
         # Check if tool use was requested
-        while res.stop_reason == "tool_use":
-            tool_use = next(block for block in res.content if block.type == "tool_use")
-            tool_name = tool_use.name
-            tool_input = tool_use.input
+        while res.function_calls:
+            messages.append({"role": "model", "parts": res.candidates[0].content.parts})
             
-            log.info(f"Trader requested tool: {tool_name} with {tool_input}")
-            tool_result = await mcp_client.execute_tool(tool_name, tool_input)
+            tool_responses = []
+            for fn_call in res.function_calls:
+                tool_name = fn_call.name
+                tool_args = fn_call.args if fn_call.args else {}
+                
+                log.info(f"Trader requested tool: {tool_name} with {tool_args}")
+                tool_result = await mcp_client.execute_tool(tool_name, tool_args)
+                
+                tool_responses.append(
+                    types.Part.from_function_response(
+                        name=tool_name,
+                        response={"result": tool_result}
+                    )
+                )
+                
+            messages.append({"role": "user", "parts": tool_responses})
             
-            messages.append({"role": "assistant", "content": res.content})
-            messages.append({
-                "role": "user",
-                "content": [
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": tool_use.id,
-                        "content": tool_result
-                    }
-                ]
-            })
-            
-            # Send result back
-            res = await client.messages.create(
-                model=settings.ANTHROPIC_MODEL_ID,
-                max_tokens=400,
-                system=TRADER_SYSTEM_PROMPT,
-                messages=messages,
-                tools=ALPACA_MCP_TOOLS
+            res = await client.aio.models.generate_content(
+                model=settings.GEMINI_MODEL,
+                contents=messages,
+                config=config
             )
             
-        # Extract final JSON
-        text_block = next((block.text for block in res.content if block.type == "text"), "")
-        data = _extract_json(text_block)
+        # Final pass to ensure we get structured output matching TraderDecision
+        # Sometimes tools config doesn't perfectly mix with response_schema in one go,
+        # so we extract the JSON or enforce it now if it didn't use a tool.
+        # However, to be safe, we can just ask Gemini to parse its final answer into the schema.
+        final_config = types.GenerateContentConfig(
+            system_instruction=TRADER_SYSTEM_PROMPT,
+            response_mime_type="application/json",
+            response_schema=TraderDecision,
+            temperature=0.0
+        )
+        
+        final_res = await client.aio.models.generate_content(
+            model=settings.GEMINI_MODEL,
+            contents=messages + [{"role": "user", "parts": [types.Part.from_text(text="Please provide your final decision in JSON matching the schema.")]}],
+            config=final_config
+        )
+
+        if not final_res.text:
+            raise ValueError("Empty final response from Gemini")
+            
+        data = json.loads(final_res.text)
         return TraderDecision(**data)
+        
     except Exception as e:
         log.warning(f"Trader error for {symbol}: {e}")
         raise e
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=False, retry_error_callback=lambda rs: None)
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception(is_transient_error), reraise=False, retry_error_callback=lambda rs: None)
 async def _run_risk_manager(symbol: str, prompt: str) -> RiskDecision | None:
     client = get_async_client()
     if not client: return None
     try:
-        res = await client.messages.create(
-            model=settings.ANTHROPIC_MODEL_ID,
-            max_tokens=300,
-            system=RISK_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": prompt}]
+        res = await client.aio.models.generate_content(
+            model=settings.GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=RISK_SYSTEM_PROMPT,
+                response_mime_type="application/json",
+                response_schema=RiskDecision,
+                temperature=0.0
+            )
         )
-        data = _extract_json(res.content[0].text)
+        if not res.text:
+            raise ValueError("Empty response from Gemini")
+        data = json.loads(res.text)
         return RiskDecision(**data)
     except Exception as e:
         log.warning(f"Risk Manager error for {symbol}: {e}")
@@ -147,12 +208,16 @@ async def evaluate_symbol_pipeline(symbol: str, bars_summary: str, news_summary:
     analyst_prompt = build_analyst_prompt(symbol, bars_summary, news_summary, vol_regime, event_context)
     
     # 1. Concurrent Bull and Bear
-    log.info(f"[{symbol}] Starting concurrent Bull and Bear Analyst evaluation...")
+    log.info(f"[{symbol}] Starting concurrent Bull and Bear Analyst evaluation with Gemini...")
     bull_task = asyncio.create_task(_run_analyst(symbol, analyst_prompt, BULL_SYSTEM_PROMPT))
     bear_task = asyncio.create_task(_run_analyst(symbol, analyst_prompt, BEAR_SYSTEM_PROMPT))
     
-    bull_decision, bear_decision = await asyncio.gather(bull_task, bear_task)
-    log.info(f"[{symbol}] Concurrent evaluation complete. Bull Conf: {bull_decision.confidence if bull_decision else None}, Bear Conf: {bear_decision.confidence if bear_decision else None}")
+    try:
+        bull_decision, bear_decision = await asyncio.gather(bull_task, bear_task)
+        log.info(f"[{symbol}] Concurrent evaluation complete. Bull Conf: {bull_decision.confidence if bull_decision else None}, Bear Conf: {bear_decision.confidence if bear_decision else None}")
+    except Exception as e:
+        log.warning(f"Failed to get analyst decisions for {symbol} due to error: {e}")
+        return None, None
     
     if not bull_decision or not bear_decision:
         log.warning(f"Failed to get analyst decisions for {symbol}")
@@ -163,13 +228,21 @@ async def evaluate_symbol_pipeline(symbol: str, bars_summary: str, news_summary:
     
     # 2. Synthesize via Trader
     trader_prompt = build_trader_prompt(symbol, bull_arg, bear_arg, recent_context, threshold)
-    trader_decision = await _run_trader(symbol, trader_prompt)
+    try:
+        trader_decision = await _run_trader(symbol, trader_prompt)
+    except Exception as e:
+        log.warning(f"Trader failed for {symbol}: {e}")
+        return None, None
     
     if not trader_decision or trader_decision.direction == "neutral" or trader_decision.confidence < threshold:
         return trader_decision, None
         
     # 3. Risk Manager Validation
     risk_prompt = build_risk_prompt(symbol, trader_decision.direction, trader_decision.confidence, vol_regime, open_positions)
-    risk_decision = await _run_risk_manager(symbol, risk_prompt)
+    try:
+        risk_decision = await _run_risk_manager(symbol, risk_prompt)
+    except Exception as e:
+        log.warning(f"Risk manager failed for {symbol}: {e}")
+        return trader_decision, None
     
     return trader_decision, risk_decision
