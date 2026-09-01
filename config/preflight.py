@@ -3,7 +3,7 @@ import sys
 from dotenv import load_dotenv
 from alpaca.trading.client import TradingClient
 from alpaca.common.exceptions import APIError
-import anthropic
+from google import genai
 import pytest
 from app_logging.logger import get_logger
 
@@ -58,16 +58,12 @@ def run_preflight_checks():
         log.error(f"Unexpected error connecting to Alpaca: {e}")
         sys.exit(1)
 
-    # 4. Anthropic Connectivity
+    # 4. Gemini Connectivity
     try:
-        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-        # We don't want to waste tokens, just checking if client initializes 
-        # is usually enough, but a quick models list or cheap ping is better.
-        # But wait, Claude doesn't have a simple ping. We will rely on the API key being present.
-        # If the key is totally invalid, an actual call will fail later.
-        log.info(f"Anthropic initialized with model ID: {settings.ANTHROPIC_MODEL_ID}")
+        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        log.info(f"Gemini initialized with model ID: {settings.GEMINI_MODEL}")
     except Exception as e:
-        log.error(f"Anthropic client initialization failed: {e}")
+        log.error(f"Gemini client initialization failed: {e}")
         sys.exit(1)
         
     log.info("All preflight checks passed.")
