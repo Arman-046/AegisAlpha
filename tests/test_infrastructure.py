@@ -80,24 +80,25 @@ def test_event_detector_polling():
     import main
     main.main_loop = loop
     
-    with patch("main.trigger_pipeline") as mock_trigger:
+    with patch("main.asyncio.run_coroutine_threadsafe") as mock_run, \
+         patch("main.trigger_pipeline", return_value="mock_coro"):
         # 1. First bar adds to cache but no trigger
         loop.run_until_complete(handle_bar(DummyBar()))
         assert "AAPL" in price_cache
         assert price_cache["AAPL"] == 150.0
-        mock_trigger.assert_not_called()
+        mock_run.assert_not_called()
         
         # 2. Second bar with small move, no trigger
         loop.run_until_complete(handle_bar(DummyBarSmallMove()))
         assert price_cache["AAPL"] == 150.1
-        mock_trigger.assert_not_called()
+        mock_run.assert_not_called()
         
         # 3. Third bar with big move, should trigger
         loop.run_until_complete(handle_bar(DummyBarBigMove()))
         assert price_cache["AAPL"] == 155.0
-        # asyncio.run_coroutine_threadsafe would schedule it, but since we are mocking, it might not be called directly
-        # Wait, the trigger is async.
-        # It's called via asyncio.run_coroutine_threadsafe. Let's just mock run_coroutine_threadsafe.
+        assert mock_run.call_count == 1
+        
+    loop.close()
         
 def test_event_detector_no_polling():
     from main import handle_bar, price_cache, last_eval_time
@@ -115,7 +116,8 @@ def test_event_detector_no_polling():
         symbol = "AAPL"
         close = 100.1
         
-    with patch("asyncio.run_coroutine_threadsafe") as mock_run:
+    with patch("main.asyncio.run_coroutine_threadsafe") as mock_run, \
+         patch("main.trigger_pipeline", return_value="mock_coro"):
         # First tick
         loop.run_until_complete(handle_bar(DummyBar()))
         mock_run.assert_not_called()
@@ -129,3 +131,5 @@ def test_event_detector_no_polling():
         # Ensure it didn't trigger
         mock_run.assert_not_called()
         assert price_cache["AAPL"] == 100.1
+        
+    loop.close()

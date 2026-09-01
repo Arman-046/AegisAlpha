@@ -24,7 +24,8 @@ def setup_teardown():
 
 @pytest.mark.asyncio
 async def test_handle_bar_rate_limit():
-    with patch("main.asyncio.run_coroutine_threadsafe") as mock_run:
+    with patch("main.asyncio.run_coroutine_threadsafe") as mock_run, \
+         patch("main.trigger_pipeline", new_callable=MagicMock, return_value="mock_coro"):
         # First bar should ONLY cache, NOT trigger
         bar1 = MockBar("AAPL", 150.0)
         await handle_bar(bar1)
@@ -43,7 +44,8 @@ async def test_handle_bar_rate_limit():
 @pytest.mark.asyncio
 async def test_handle_news_rate_limit():
     with patch("main.asyncio.run_coroutine_threadsafe") as mock_run, \
-         patch("main.settings.WATCHLIST", ["AAPL"]):
+         patch("main.settings.WATCHLIST", ["AAPL"]), \
+         patch("main.trigger_pipeline", new_callable=MagicMock, return_value="mock_coro"):
         news1 = MockNews(["AAPL"], "Apple releases new iPhone")
         await handle_news(news1)
         assert mock_run.call_count == 1
@@ -56,7 +58,8 @@ async def test_handle_news_rate_limit():
 @pytest.mark.asyncio
 async def test_handle_news_not_in_watchlist():
     with patch("main.asyncio.run_coroutine_threadsafe") as mock_run, \
-         patch("main.settings.WATCHLIST", ["TSLA"]):
+         patch("main.settings.WATCHLIST", ["TSLA"]), \
+         patch("main.trigger_pipeline", new_callable=MagicMock, return_value="mock_coro"):
         news1 = MockNews(["AAPL"], "Apple releases new iPhone")
         await handle_news(news1)
         assert mock_run.call_count == 0
