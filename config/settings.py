@@ -15,14 +15,31 @@ class Settings(BaseSettings):
     # Paper Trading Safety
     PAPER: bool = Field(default=True, description="Must be true for paper trading")
     
+    # Dynamic Screener Parameters
+    UNIVERSE: List[str] = Field(default=[
+        "SPY", "QQQ", "AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "META", "GOOGL", "NFLX",
+        "AMD", "INTC", "QCOM", "AVGO", "CSCO", "ORCL", "CRM", "ADBE",
+        "JPM", "BAC", "V", "MA", "GS", "MS", 
+        "XOM", "CVX", 
+        "JNJ", "UNH", "LLY", "PFE"
+    ], description="S&P 100 style liquid universe for the AI screener")
+    MAX_SCREEN_CANDIDATES: int = Field(default=10, description="Max candidates to send to Gemini")
+    WATCHLIST_SIZE: int = Field(default=5, description="Number of symbols in the dynamic watchlist")
+    WATCHLIST_REFRESH_INTERVAL: int = Field(default=3600, description="Seconds between watchlist refreshes (1 hour)")
+    
     # Trading Parameters
-    WATCHLIST: List[str] = Field(default=["SPY", "AAPL", "MSFT", "NVDA", "TSLA"])
+    WATCHLIST: List[str] = Field(default=["SPY", "AAPL", "MSFT", "NVDA", "TSLA"], description="Active watchlist (can be dynamically updated)")
     SECTOR_MAP: dict = Field(default={
-        "SPY": "Market",
-        "AAPL": "Tech",
-        "MSFT": "Tech",
-        "NVDA": "Tech",
-        "TSLA": "Consumer"
+        "SPY": "Market", "QQQ": "Market",
+        "AAPL": "Tech", "MSFT": "Tech", "NVDA": "Tech", "AMZN": "Consumer", 
+        "META": "Tech", "GOOGL": "Tech", "NFLX": "Consumer", "AMD": "Tech",
+        "INTC": "Tech", "QCOM": "Tech", "AVGO": "Tech", "CSCO": "Tech", 
+        "ORCL": "Tech", "CRM": "Tech", "ADBE": "Tech",
+        "TSLA": "Consumer",
+        "JPM": "Financials", "BAC": "Financials", "V": "Financials", "MA": "Financials", 
+        "GS": "Financials", "MS": "Financials",
+        "XOM": "Energy", "CVX": "Energy",
+        "JNJ": "Healthcare", "UNH": "Healthcare", "LLY": "Healthcare", "PFE": "Healthcare"
     }, description="Map of symbols to sectors for correlation limits")
     MAX_SECTOR_EXPOSURE_PERCENT: float = Field(default=0.06, description="Max 6% risk per sector")
     MAX_DIRECTIONAL_EXPOSURE_PERCENT: float = Field(default=0.10, description="Max 10% risk per direction (Bullish/Bearish)")

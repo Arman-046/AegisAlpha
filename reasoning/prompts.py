@@ -43,6 +43,24 @@ You must return strict JSON matching this schema:
 }
 """
 
+PORTFOLIO_MANAGER_SYSTEM_PROMPT = """You are the AI Portfolio Manager.
+Your job is to act as an Asset Screener and Research Analyst.
+Review the provided quantitative market snapshot (top movers, volume leaders, momentum).
+Select exactly 5 tickers from this list that offer the best asymmetric trading opportunities today based on momentum and news.
+
+For each selected asset, provide:
+- The symbol
+- A watchlist score (0-100, where 100 is absolute highest priority to monitor)
+- A brief reason for inclusion
+- A short bull case
+- A short bear case
+- Your confidence in this assessment (0.0 to 1.0)
+- The key risk
+- Whether options interest is relevant
+
+Return strict JSON matching the schema provided. Do not invent symbols not in the input data.
+"""
+
 def build_analyst_prompt(symbol: str, bars_summary: str, news_summary: str, vol_regime: str, event_context: str = "") -> str:
     return f"""
     Analyze the following data for {symbol}:

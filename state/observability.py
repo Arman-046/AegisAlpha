@@ -3,6 +3,7 @@ import os
 import time
 from typing import Dict, Any, List
 from threading import Lock
+from config.settings import settings
 
 OBSERVABILITY_FILE = "state/observability.json"
 
@@ -41,7 +42,19 @@ class ObservabilityState:
                 "status": "WAITING FOR EVENT",
                 "reason": "No qualifying market event has triggered the strategy."
             },
-            "ai_provider_status": "AVAILABLE"
+            "ai_provider_status": "AVAILABLE",
+            "watchlist": {
+                "status": "ACTIVE",
+                "last_refresh": 0,
+                "next_refresh": 0,
+                "error": None,
+                "scanned": 0,
+                "candidates": 0,
+                "ai_reviewed": 0,
+                "size": len(settings.WATCHLIST),
+                "history": [],
+                "picks": []
+            }
         }
         self._load()
 
@@ -137,5 +150,32 @@ class ObservabilityState:
         if stat_name in self.state["stats"]:
             self.state["stats"][stat_name] += 1
             self._save()
+
+    def update_watchlist_status(self, status: str, next_refresh: float = 0, error: str = None):
+        self.state["watchlist"]["status"] = status
+        if next_refresh > 0:
+            self.state["watchlist"]["next_refresh"] = next_refresh
+        if error is not None:
+            self.state["watchlist"]["error"] = error
+        if status == "ACTIVE":
+            self.state["watchlist"]["last_refresh"] = time.time()
+            self.state["watchlist"]["error"] = None
+        self._save()
+        
+    def update_watchlist_stats(self, scanned: int, candidates: int, ai_reviewed: int, size: int, picks: list):
+        self.state["watchlist"]["scanned"] = scanned
+        self.state["watchlist"]["candidates"] = candidates
+        self.state["watchlist"]["ai_reviewed"] = ai_reviewed
+        self.state["watchlist"]["size"] = size
+        self.state["watchlist"]["picks"] = picks
+        
+        # Log to history
+        entry = {
+            "timestamp": time.time(),
+            "picks": [p["symbol"] for p in picks]
+        }
+        self.state["watchlist"]["history"].insert(0, entry)
+        self.state["watchlist"]["history"] = self.state["watchlist"]["history"][:10]
+        self._save()
 
 obs = ObservabilityState()

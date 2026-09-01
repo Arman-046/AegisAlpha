@@ -232,7 +232,88 @@ with col2:
         tags_html += f"<span class='tag tag-active'>{s} ●</span>"
     st.markdown((html_content + tags_html + "</div>").replace('\n', ''), unsafe_allow_html=True)
 
-# 2. LIVE PIPELINE VISUALIZATION
+# 2. INTELLIGENT WATCHLIST
+wl_state = obs.get("watchlist", {}) if obs else {}
+wl_status = wl_state.get("status", "UNKNOWN")
+wl_last = wl_state.get("last_refresh", 0)
+wl_next = wl_state.get("next_refresh", 0)
+wl_picks = wl_state.get("picks", [])
+
+st.markdown("### AEGISALPHA INTELLIGENT WATCHLIST")
+
+# Funnel stats
+scanned = wl_state.get("scanned", len(settings.UNIVERSE))
+quant = wl_state.get("candidates", 0)
+ai_rev = wl_state.get("ai_reviewed", 0)
+wl_size = wl_state.get("size", len(settings.WATCHLIST))
+
+funnel_html = f"""
+<div class="premium-card" style="margin-bottom: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid #1e293b; padding-bottom: 12px;">
+        <div style="font-size: 0.9rem; color: #94a3b8;">
+            Updated: <span style="color:#f8fafc;">{format_time(wl_last) if wl_last > 0 else 'Never'}</span> | 
+            Next refresh: <span style="color:#38bdf8;">{format_time(wl_next) if wl_next > 0 else 'Market Closed'}</span>
+        </div>
+        <div style="font-size: 0.85rem; padding: 4px 8px; border-radius: 4px; background: {'rgba(16, 185, 129, 0.1)' if wl_status == 'ACTIVE' else 'rgba(56, 189, 248, 0.1)'}; color: {'#10b981' if wl_status == 'ACTIVE' else '#38bdf8'};">
+            STATUS: {wl_status}
+        </div>
+    </div>
+    
+    <div style="display: flex; justify-content: space-between; text-align: center; margin-bottom: 24px;">
+        <div style="flex: 1;">
+            <div style="font-size: 1.5rem; font-weight: 800; color: #f1f5f9;">{scanned}</div>
+            <div style="font-size: 0.75rem; color: #64748b; font-weight: 700; letter-spacing: 1px;">UNIVERSE</div>
+        </div>
+        <div style="color: #334155; font-size: 1.5rem; display: flex; align-items: center;">→</div>
+        <div style="flex: 1;">
+            <div style="font-size: 1.5rem; font-weight: 800; color: #f1f5f9;">{quant}</div>
+            <div style="font-size: 0.75rem; color: #64748b; font-weight: 700; letter-spacing: 1px;">QUANT SCREEN</div>
+        </div>
+        <div style="color: #334155; font-size: 1.5rem; display: flex; align-items: center;">→</div>
+        <div style="flex: 1;">
+            <div style="font-size: 1.5rem; font-weight: 800; color: #f1f5f9;">{ai_rev}</div>
+            <div style="font-size: 0.75rem; color: #64748b; font-weight: 700; letter-spacing: 1px;">GEMINI ANALYSIS</div>
+        </div>
+        <div style="color: #334155; font-size: 1.5rem; display: flex; align-items: center;">→</div>
+        <div style="flex: 1;">
+            <div style="font-size: 1.5rem; font-weight: 800; color: #38bdf8;">{wl_size}</div>
+            <div style="font-size: 0.75rem; color: #38bdf8; font-weight: 700; letter-spacing: 1px;">WATCHLIST</div>
+        </div>
+    </div>
+"""
+
+if wl_picks:
+    funnel_html += "<div style='display: flex; flex-direction: column; gap: 8px;'>"
+    for i, pick in enumerate(wl_picks):
+        sym = pick.get('symbol', 'UNK')
+        score = pick.get('score', 0)
+        reason = pick.get('reason', '')
+        
+        # Color coding score
+        s_color = "#10b981" if score >= 85 else "#f59e0b" if score >= 70 else "#94a3b8"
+        s_label = "HIGH INTEREST" if score >= 85 else "WATCH"
+        
+        funnel_html += f"""
+        <div style="display: flex; align-items: center; background: rgba(15, 23, 42, 0.4); padding: 12px; border-radius: 6px; border-left: 3px solid {s_color};">
+            <div style="width: 30px; color: #64748b; font-size: 0.8rem;">{i+1:02d}</div>
+            <div style="width: 80px; font-weight: 800; color: #f1f5f9; font-size: 1.1rem;">{sym}</div>
+            <div style="width: 60px; font-weight: 800; color: {s_color}; font-size: 1.1rem;">{score}</div>
+            <div style="width: 140px; font-size: 0.75rem; color: {s_color}; font-weight: 700;">{s_label}</div>
+            <div style="flex: 1; font-size: 0.9rem; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{reason}</div>
+        </div>
+        """
+    funnel_html += "</div>"
+else:
+    funnel_html += f"""
+    <div style="text-align: center; padding: 20px; color: #64748b;">
+        {"Waiting for first AI watchlist generation..." if not wl_state.get('error') else f"Error generating watchlist: {wl_state.get('error')}"}
+    </div>
+    """
+
+funnel_html += "</div>"
+st.markdown(funnel_html.replace('\n', ''), unsafe_allow_html=True)
+
+# 3. LIVE PIPELINE VISUALIZATION
 st.markdown("### LIVE DECISION PIPELINE")
 
 pipeline = obs.get("pipeline", {}) if obs else {}
@@ -260,7 +341,7 @@ nodes_html += "</div></div>"
 
 st.markdown(nodes_html.replace('\n', ''), unsafe_allow_html=True)
 
-# 3. CURRENT EVALUATION & WHY DIDN'T IT TRADE?
+# 4. CURRENT EVALUATION & WHY DIDN'T IT TRADE?
 col3, col4 = st.columns(2)
 with col3:
     st.markdown("### CURRENT EVENT")
@@ -298,7 +379,7 @@ with col4:
     </div>
     """.replace('\n', ''), unsafe_allow_html=True)
 
-# 4. ACTIVITY & ERRORS
+# 5. ACTIVITY & ERRORS
 col5, col6 = st.columns(2)
 with col5:
     st.markdown("### REAL-TIME AGENT ACTIVITY")
@@ -335,7 +416,7 @@ with col6:
         err_html += "</div>"
         st.markdown(err_html.replace('\n', ''), unsafe_allow_html=True)
 
-# 5. SESSION STATS & P&L
+# 6. SESSION STATS & P&L
 col7, col8 = st.columns(2)
 with col7:
     st.markdown("### SESSION STATISTICS")

@@ -330,7 +330,11 @@ async def handle_trade(trade):
     except Exception as e:
         log.error(f"Error in handle_trade: {e}")
 
+stock_stream = None
+news_stream = None
+
 def start_streams():
+    global stock_stream, news_stream
     api_key = settings.APCA_API_KEY_ID
     secret_key = settings.APCA_API_SECRET_KEY
     
@@ -380,6 +384,49 @@ async def heartbeat_loop():
         
         await asyncio.sleep(60)
 
+async def watchlist_refresh_loop():
+    """Background task to dynamically update the AI watchlist."""
+    from strategy.screener import generate_watchlist
+    
+    # Wait 30 seconds after startup before first run to let streams initialize
+    await asyncio.sleep(30)
+    
+    while True:
+        try:
+            if not is_market_open(trading_client):
+                obs.update_watchlist_status("MARKET CLOSED", next_refresh=0)
+                await asyncio.sleep(300)
+                continue
+                
+            new_watchlist = await generate_watchlist()
+            if new_watchlist and new_watchlist != settings.WATCHLIST:
+                old_watchlist = settings.WATCHLIST.copy()
+                settings.WATCHLIST = new_watchlist
+                
+                if stock_stream:
+                    try:
+                        stock_stream.unsubscribe_bars(*old_watchlist)
+                        stock_stream.subscribe_bars(handle_bar, *new_watchlist)
+                    except Exception as e:
+                        log.error(f"Failed to update stock stream subscriptions: {e}")
+                        
+                if news_stream:
+                    try:
+                        news_stream.unsubscribe_news(*old_watchlist)
+                        news_stream.subscribe_news(handle_news, *new_watchlist)
+                    except Exception as e:
+                        log.error(f"Failed to update news stream subscriptions: {e}")
+                        
+                log.info(f"Successfully migrated data streams to new watchlist: {new_watchlist}")
+                
+            next_time = time.time() + settings.WATCHLIST_REFRESH_INTERVAL
+            obs.update_watchlist_status("ACTIVE", next_refresh=next_time)
+            
+        except Exception as e:
+            log.error(f"Error in watchlist_refresh_loop: {e}")
+            
+        await asyncio.sleep(settings.WATCHLIST_REFRESH_INTERVAL)
+
 async def autonomous_loop():
     global main_loop
     main_loop = asyncio.get_running_loop()
@@ -407,6 +454,7 @@ async def autonomous_loop():
     start_streams()
     
     asyncio.create_task(heartbeat_loop())
+    asyncio.create_task(watchlist_refresh_loop())
     
     # Periodic background loop for state reconciliation and position monitoring
     while True:

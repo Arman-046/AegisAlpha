@@ -17,6 +17,7 @@ from reasoning.prompts import (
     BEAR_SYSTEM_PROMPT,
     TRADER_SYSTEM_PROMPT,
     RISK_SYSTEM_PROMPT,
+    PORTFOLIO_MANAGER_SYSTEM_PROMPT,
     build_analyst_prompt,
     build_trader_prompt,
     build_risk_prompt
@@ -40,6 +41,19 @@ class RiskDecision(BaseModel):
     adjusted_confidence: float = Field(ge=0.0, le=1.0)
     rationale: str
 
+class ScreenerCandidate(BaseModel):
+    symbol: str
+    score: int = Field(ge=0, le=100)
+    reason: str
+    bull_case: str
+    bear_case: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    key_risk: str
+    options_interest: str
+
+class ScreenerResponse(BaseModel):
+    watchlist: list[ScreenerCandidate]
+
 _async_client = None
 
 def get_async_client():
@@ -57,6 +71,33 @@ def is_transient_error(e: Exception) -> bool:
     if "400" in err_str or "401" in err_str or "403" in err_str or "404" in err_str:
         return False
     return True
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception(is_transient_error), reraise=False, retry_error_callback=lambda rs: None)
+async def evaluate_screener_candidates(candidates_data: str) -> list[dict] | None:
+    client = get_async_client()
+    if not client: return None
+    try:
+        res = await client.aio.models.generate_content(
+            model=settings.GEMINI_MODEL,
+            contents=f"Please analyze these top quantitative candidates and select the 5 best:\n{candidates_data}",
+            config=types.GenerateContentConfig(
+                system_instruction=PORTFOLIO_MANAGER_SYSTEM_PROMPT,
+                response_mime_type="application/json",
+                response_schema=ScreenerResponse,
+                temperature=0.2
+            )
+        )
+        if not res.text: return None
+        
+        data = json.loads(res.text)
+        validated = ScreenerResponse(**data)
+        
+        return [c.model_dump() for c in validated.watchlist]
+        
+    except Exception as e:
+        log.error(f"Failed to generate screener watchlist: {e}")
+        return None
+
 
 def get_gemini_tools() -> list:
     """Translates ALPACA_MCP_TOOLS to Gemini FunctionDeclarations"""
