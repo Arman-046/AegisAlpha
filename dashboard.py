@@ -370,10 +370,25 @@ with col8:
         try:
             account = client.get_account()
             eq = float(account.equity)
+            last_eq = float(account.last_equity)
+            today_pnl = eq - last_eq
+            today_pnl_pct = (today_pnl / last_eq) * 100 if last_eq > 0 else 0
+            
+            pnl_color = "#10b981" if today_pnl >= 0 else "#ef4444"
+            pnl_sign = "+" if today_pnl >= 0 else ""
+            
             st.markdown(f"""
             <div class="premium-card">
-                <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">TOTAL EQUITY</div>
-                <div style="font-size: 2.5rem; font-weight: 800; color: #10b981; margin-bottom: 12px;">${eq:,.2f}</div>
+                <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px;">
+                    <div>
+                        <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">TOTAL EQUITY</div>
+                        <div style="font-size: 2.5rem; font-weight: 800; color: #f8fafc;">${eq:,.2f}</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">TODAY'S P&L</div>
+                        <div style="font-size: 1.5rem; font-weight: 800; color: {pnl_color};">{pnl_sign}${today_pnl:,.2f} ({pnl_sign}{today_pnl_pct:.2f}%)</div>
+                    </div>
+                </div>
                 <div style="font-size: 0.95rem; color: #94a3b8; line-height: 1.5; border-top: 1px solid #1e293b; padding-top: 16px;">
                     AegisAlpha does not create trades simply to generate performance. Capital is deployed only after an opportunity passes the complete decision and deterministic risk pipeline.
                 </div>
@@ -384,8 +399,16 @@ with col8:
     else:
         st.markdown("""
         <div class="premium-card">
-            <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">TOTAL EQUITY</div>
-            <div style="font-size: 2.5rem; font-weight: 800; color: #94a3b8; margin-bottom: 12px;">$0.00</div>
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px;">
+                <div>
+                    <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">TOTAL EQUITY</div>
+                    <div style="font-size: 2.5rem; font-weight: 800; color: #94a3b8;">$0.00</div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">TODAY'S P&L</div>
+                    <div style="font-size: 1.5rem; font-weight: 800; color: #94a3b8;">+$0.00 (+0.00%)</div>
+                </div>
+            </div>
             <div style="font-size: 0.95rem; color: #94a3b8; line-height: 1.5; border-top: 1px solid #1e293b; padding-top: 16px;">
                 <strong>Demo Mode: No realized P&L.</strong><br>
                 AegisAlpha does not create trades simply to generate performance.
