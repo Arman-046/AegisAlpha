@@ -284,37 +284,6 @@ with col2:
         tags_html += f"<span class='tag tag-active'>{s} <span class='blinking-dot'>●</span></span>"
     st.markdown((html_content + tags_html + "</div>").replace('\n', ''), unsafe_allow_html=True)
 
-    if is_demo:
-        st.markdown("### DEMONSTRATION CONTROLS")
-        st.markdown("<div style='font-size: 0.9rem; color: #94a3b8; margin-bottom: 12px;'>Trigger controlled simulation scenarios. The AI will evaluate real/mocked data and run through the deterministic pipeline.</div>", unsafe_allow_html=True)
-        col_btn1, col_btn2, col_btn3 = st.columns(3)
-
-        def write_demo_trigger(scenario):
-            import uuid
-            trigger_file = "state/demo_trigger.json"
-            temp_file = trigger_file + ".tmp_write"
-            data = {
-                "request_id": str(uuid.uuid4()),
-                "scenario": scenario,
-                "requested_at": datetime.now(timezone.utc).isoformat(),
-                "status": "PENDING"
-            }
-            # Atomic write
-            with open(temp_file, "w") as f:
-                json.dump(data, f)
-            os.replace(temp_file, trigger_file)
-            st.toast(f"Demo trigger sent: {scenario}", icon="🚀")
-
-        with col_btn1:
-            if st.button("▶️ SCENARIO A: APPROVED", use_container_width=True):
-                write_demo_trigger("approved_trade")
-        with col_btn2:
-            if st.button("⏹️ SCENARIO B: RISK VETO", use_container_width=True):
-                write_demo_trigger("risk_rejection")
-        with col_btn3:
-            if st.button("⚠️ SCENARIO C: DATA FAIL", use_container_width=True):
-                write_demo_trigger("data_rejection")
-
 # 2. INTELLIGENT WATCHLIST
 wl_state = obs.get("watchlist", {}) if obs else {}
 wl_status = wl_state.get("status", "UNKNOWN")
@@ -605,18 +574,17 @@ else:
     live_actions = ["EXECUTED", "FAILED_EXECUTION"]
     cf_actions = ["PASSED", "VETOED", "NO_CONTRACT", "VALIDATION_FAILED", "RANK_REJECTED", "RISK_REJECTED"]
 
-    executed = [h for h in history if h.get("action") in live_actions and h.get("mode") == "LIVE_PAPER"]
-    demo_executed = [h for h in history if h.get("mode") == "DEMO"]
+    live_executed = [h for h in history if h.get("action") in live_actions and h.get("mode") == "LIVE_PAPER"]
     counterfactuals = [h for h in history if h.get("action") in cf_actions and h.get("mode") != "DEMO"]
     failures = [h for h in history if h.get("action") not in live_actions and h.get("action") not in cf_actions and h.get("mode") != "DEMO"]
 
-    tab1, tab2, tab3, tab4 = st.tabs(["🔴 LIVE PAPER EXECUTIONS", "🔵 DEMO SIMULATIONS", "🟡 COUNTERFACTUALS (WHAT-IF)", "⚙️ SYSTEM FAILURES"])
+    tab1, tab3, tab4 = st.tabs(["🔴 LIVE PAPER EXECUTIONS", "🟡 COUNTERFACTUALS (WHAT-IF)", "⚙️ SYSTEM FAILURES"])
 
     with tab1:
-        if not executed:
+        if not live_executed:
             st.markdown("<div style='padding: 20px; color: #94a3b8; text-align: center;'>No live trades executed yet.</div>", unsafe_allow_html=True)
         else:
-            for item in reversed(executed):
+            for item in reversed(live_executed):
                 ts = format_time(item.get("timestamp"))
                 sym = item.get("symbol", "")
                 dir_color = "#10b981" if item.get("direction") == "bullish" else "#ef4444" if item.get("direction") == "bearish" else "#94a3b8"
@@ -631,49 +599,6 @@ else:
                     <div style='margin-top: 8px; font-size: 0.85rem; color: #94a3b8;'>
                         Option: {item.get('option_candidate', 'N/A')} | Rank Score: {item.get('rank_score', 0):.1f}/100 | AI Conf: {item.get('confidence', 0):.2f}
                     </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-    with tab2:
-        st.markdown("<div style='background-color: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; padding: 12px; border-radius: 6px; margin-bottom: 20px; font-size: 0.9rem;'><strong>NOTE:</strong> These are strictly simulated demo trades running through the AegisAlpha engine for demonstration purposes. They are mathematically excluded from Live Paper statistics.</div>", unsafe_allow_html=True)
-        if not demo_executed:
-            st.markdown("<div style='padding: 20px; color: #94a3b8; text-align: center;'>No demo simulations recorded yet.</div>", unsafe_allow_html=True)
-        else:
-            for item in reversed(demo_executed):
-                ts = format_time(item.get("timestamp"))
-                sym = item.get("symbol", "")
-                dir_color = "#38bdf8"
-                action_color = "#10b981" if "EXECUTED" in item.get("action") else "#ef4444"
-
-                st.markdown(f"""
-                <div class='premium-card' style='border-left: 4px solid {dir_color};'>
-                    <div style='display: flex; justify-content: space-between;'>
-                        <strong style='font-size: 1.2rem; color: #f8fafc;'>{sym} - DEMO {item.get('action')}</strong>
-                        <span style='color: #64748b;'>{ts}</span>
-                    </div>
-
-                    <div style='margin-top: 16px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; background: rgba(15, 23, 42, 0.5); padding: 16px; border-radius: 8px;'>
-                        <div>
-                            <div style='font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;'>AI CONFIDENCE</div>
-                            <div style='font-size: 1.2rem; color: #f8fafc; font-weight: 700;'>{item.get('confidence', 0):.0f}%</div>
-                        </div>
-                        <div>
-                            <div style='font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;'>ENGINEERING SCORE</div>
-                            <div style='font-size: 1.2rem; color: #f8fafc; font-weight: 700;'>{item.get('rank_score', 0):.1f} / 100</div>
-                        </div>
-                        <div style='grid-column: span 2;'>
-                            <div style='font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;'>RISK GOVERNOR</div>
-                            <div style='font-size: 1.1rem; color: #f8fafc; font-weight: 700;'>{'APPROVED' if 'EXECUTED' in item.get('action') else 'LIMIT EXCEEDED / VETOED'}</div>
-                        </div>
-                    </div>
-
-                    <div style='margin-top: 16px;'>
-                        <div style='font-size: 0.8rem; color: #94a3b8; text-transform: uppercase;'>RESULT</div>
-                        <div style='color: {action_color}; font-size: 1.1rem; font-weight: 800;'>{item.get('reason')}</div>
-                    </div>
-
-                    <div style='color: #38bdf8; font-size: 0.85rem; margin-top: 12px;'>Event: {item.get('event', 'Unknown')}</div>
-                    <div style='color: #cbd5e1; margin-top: 8px; font-size: 0.95rem;'><strong>Synthesis:</strong> {item.get('trader_synthesis', 'N/A')}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
