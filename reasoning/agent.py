@@ -277,7 +277,7 @@ async def evaluate_symbol_pipeline(symbol: str, bars_summary: str, news_summary:
     
     try:
         bull_decision, bear_decision = await asyncio.wait_for(
-            asyncio.gather(bull_task, bear_task), timeout=45.0
+            asyncio.gather(bull_task, bear_task), timeout=90.0
         )
         log.info(f"[{symbol}] Concurrent evaluation complete. Bull Conf: {bull_decision.confidence if bull_decision else None}, Bear Conf: {bear_decision.confidence if bear_decision else None}")
     except Exception as e:
@@ -302,7 +302,7 @@ async def evaluate_symbol_pipeline(symbol: str, bars_summary: str, news_summary:
     obs.update_stage("TRADER", "PROCESSING")
     trader_prompt = build_trader_prompt(symbol, bull_arg, bear_arg, recent_context, threshold)
     try:
-        trader_decision = await asyncio.wait_for(_run_trader(symbol, trader_prompt), timeout=45.0)
+        trader_decision = await asyncio.wait_for(_run_trader(symbol, trader_prompt), timeout=150.0)
         if trader_decision:
             obs.update_stage("TRADER", "COMPLETED")
         else:
@@ -319,7 +319,7 @@ async def evaluate_symbol_pipeline(symbol: str, bars_summary: str, news_summary:
     obs.update_stage("RISK", "PROCESSING")
     risk_prompt = build_risk_prompt(symbol, trader_decision.direction, trader_decision.confidence, vol_regime, open_positions)
     try:
-        risk_decision = await asyncio.wait_for(_run_risk_manager(symbol, risk_prompt), timeout=45.0)
+        risk_decision = await asyncio.wait_for(_run_risk_manager(symbol, risk_prompt), timeout=90.0)
         if risk_decision:
             obs.update_stage("RISK", "COMPLETED")
         else:
