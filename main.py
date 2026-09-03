@@ -71,9 +71,9 @@ async def process_symbol(event: Event, open_positions: int) -> dict | None:
     if not trader_decision:
         log.error(f"Pipeline failure for {symbol}. Evaluation aborted.")
         mode_val = "DEMO" if event.is_simulated else "LIVE_PAPER"
-        memory.add_decision(symbol, "neutral", 0.0, "FAILED", "AI UNAVAILABLE: Gemini API failure", event=event, is_counterfactual=False, mode=mode_val)
-        obs.set_terminal_state("AI UNAVAILABLE", "Gemini reasoning failed or returned empty.")
-        obs.log_error("AI", f"Gemini API failure during evaluation for {symbol}")
+        memory.add_decision(symbol, "neutral", 0.0, "FAILED", "AI UNAVAILABLE: Groq API failure", event=event, is_counterfactual=False, mode=mode_val)
+        obs.set_terminal_state("AI UNAVAILABLE", "Groq reasoning failed or returned empty.")
+        obs.log_error("AI", f"Groq API failure during evaluation for {symbol}")
         obs.increment_stat("ai_failures")
         return None
         

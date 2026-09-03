@@ -50,7 +50,7 @@ def quantitative_prescreen() -> List[Dict]:
         return []
 
 def format_candidates_for_ai(candidates: List[Dict]) -> str:
-    """Formats the quantitative candidates into a text string for Gemini."""
+    """Formats the quantitative candidates into a text string for Groq."""
     lines = ["Candidate Universe Snapshot:"]
     for c in candidates:
         lines.append(f"Symbol: {c['symbol']}, Price: ${c['price']:.2f}, Volume: {c['volume']}, Momentum: {c['momentum']:.4f}")
@@ -80,12 +80,12 @@ async def generate_watchlist() -> List[str]:
     candidates_data = format_candidates_for_ai(candidates)
     
     # 3. AI Evaluation
-    log.info(f"Sending top {len(candidates)} candidates to Gemini Portfolio Manager...")
+    log.info(f"Sending top {len(candidates)} candidates to Groq Portfolio Manager...")
     ai_results = await evaluate_screener_candidates(candidates_data)
     
     if not ai_results:
-        log.warning("Gemini evaluation failed. Falling back to existing watchlist.")
-        obs.update_watchlist_status("FAILED", error="GEMINI UNAVAILABLE")
+        log.warning("Groq evaluation failed. Falling back to existing watchlist.")
+        obs.update_watchlist_status("FAILED", error="GROQ UNAVAILABLE")
         return settings.WATCHLIST
         
     # 4. Process Results

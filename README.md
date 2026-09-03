@@ -2,11 +2,11 @@
   <img src="aegisalpha_logo_v2.png" width="300" alt="AegisAlpha Logo">
 
 # 🛡️ AegisAlpha
-**Autonomous Event-Driven Options Agent powered by Google Gemini & Alpaca**
+**Autonomous Event-Driven Options Agent powered by Google Groq & Alpaca**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Alpaca API](https://img.shields.io/badge/Alpaca-Brokerage-yellow.svg)](https://alpaca.markets/)
-[![Gemini](https://img.shields.io/badge/AI-Gemini-blue.svg)](https://deepmind.google/technologies/gemini/)
+[![Groq](https://img.shields.io/badge/AI-Groq-blue.svg)](https://deepmind.google/technologies/gemini/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 *AI Proposes. Data Informs. Risk Governs. Code Executes.*
@@ -17,7 +17,7 @@
 
 ## 📖 What is AegisAlpha?
 
-**AegisAlpha** is an advanced, fully autonomous options trading agent. It bridges the reasoning capabilities of **Google Gemini** with the execution power of the **Alpaca Brokerage**. 
+**AegisAlpha** is an advanced, fully autonomous options trading agent. It bridges the reasoning capabilities of **Google Groq** with the execution power of the **Alpaca Brokerage**. 
 
 Unlike naive LLM trading bots that blindly buy based on sentiment, AegisAlpha implements a **strict separation of concerns**. It uses independent LLM roles (Bull vs. Bear) to debate an asset's direction, quantitatively scores opportunities using an Engineering Quality Score, and routes every decision through a **Deterministic Risk Governor** that enforces hard portfolio limits before execution. 
 
@@ -83,7 +83,7 @@ flowchart TD
 AegisAlpha relies on **zero polling**. The pipeline only evaluates a stock if triggered by a live event (e.g., a real-time price spike > 0.5% or breaking news via Alpaca Data Streams). 
 
 ### ⚖️ Bull / Bear Reasoning
-When triggered, AegisAlpha spins up two parallel Gemini contexts: a Bull and a Bear. They each parse the exact same market event and construct opposing theses. A third "Trader" agent evaluates the debate to produce a final directional synthesis.
+When triggered, AegisAlpha spins up two parallel Groq contexts: a Bull and a Bear. They each parse the exact same market event and construct opposing theses. A third "Trader" agent evaluates the debate to produce a final directional synthesis.
 
 ### 🛡️ Tradeability Validation
 If the Trader finds a signal, the system pulls live Alpaca Option Snapshots. It performs strict, deterministic quantitative checks (Bid/Ask spread limits, Open Interest > 10, DTE ranges). If a metric like Implied Volatility or Greeks is missing from the exchange, AegisAlpha fails closed and marks it `UNAVAILABLE`—it **never fabricates data**.
@@ -121,7 +121,7 @@ AegisAlpha is heavily tested with an uncompromising safety philosophy.
 **Test Baseline:** 53 / 53 Passing Tests
 
 Safety Assertions Guaranteed:
-* Gemini reasoning failures fail-closed immediately (AI UNAVAILABLE).
+* Groq reasoning failures fail-closed immediately (AI UNAVAILABLE).
 * Counterfactual records explicitly cannot influence Live Execution Statistics.
 * Deterministic Risk rejections mathematically cannot reach the Alpaca order execution layer.
 
@@ -132,7 +132,7 @@ Safety Assertions Guaranteed:
 ### Requirements
 * Python 3.10+
 * Alpaca Paper Trading Account
-* Google Gemini API Key
+* Google Groq API Key
 
 ### Configuration
 1. Clone the repository and install dependencies:
@@ -146,7 +146,7 @@ Safety Assertions Guaranteed:
 3. Edit `.env` to include your:
    - `APCA_API_KEY_ID`
    - `APCA_API_SECRET_KEY`
-   - `GEMINI_API_KEY`
+   - `GROQ_API_KEY`
 
 ### Running the Agent Locally
 

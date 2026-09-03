@@ -252,7 +252,7 @@ def render_dashboard_body():
                 </div>
                 <div style="display: flex; justify-content: space-between;">
                     <span style="color: #94a3b8;">● AI</span>
-                    <span style="color: {ai_color}; font-weight: bold;">GEMINI — {ai_status}</span>
+                    <span style="color: {ai_color}; font-weight: bold;">GROQ — {ai_status}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between;">
                     <span style="color: #94a3b8;">● Alpaca API</span>
@@ -330,7 +330,7 @@ def render_dashboard_body():
             <div style="color: #334155; font-size: 1.5rem; display: flex; align-items: center;">→</div>
             <div style="flex: 1;">
                 <div style="font-size: 1.5rem; font-weight: 800; color: #f1f5f9;">{ai_rev}</div>
-                <div style="font-size: 0.75rem; color: #64748b; font-weight: 700; letter-spacing: 1px;">GEMINI ANALYSIS</div>
+                <div style="font-size: 0.75rem; color: #64748b; font-weight: 700; letter-spacing: 1px;">GROQ ANALYSIS</div>
             </div>
             <div style="color: #334155; font-size: 1.5rem; display: flex; align-items: center;">→</div>
             <div style="flex: 1;">

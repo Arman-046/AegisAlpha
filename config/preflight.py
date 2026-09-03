@@ -3,7 +3,7 @@ import sys
 from dotenv import load_dotenv
 from alpaca.trading.client import TradingClient
 from alpaca.common.exceptions import APIError
-from google import genai
+
 import pytest
 from app_logging.logger import get_logger
 
@@ -58,12 +58,13 @@ def run_preflight_checks():
         log.error(f"Unexpected error connecting to Alpaca: {e}")
         sys.exit(1)
 
-    # 4. Gemini Connectivity
+    # 4. Groq Connectivity
     try:
-        client = genai.Client(api_key=settings.GEMINI_API_KEY)
-        log.info(f"Gemini initialized with model ID: {settings.GEMINI_MODEL}")
+        from groq import Groq
+        client = Groq(api_key=settings.GROQ_API_KEY)
+        log.info(f"Groq initialized with model ID: {settings.GROQ_MODEL}")
     except Exception as e:
-        log.error(f"Gemini client initialization failed: {e}")
+        log.error(f"Groq client initialization failed: {e}")
         sys.exit(1)
         
     log.info("All preflight checks passed.")
