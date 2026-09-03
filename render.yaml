@@ -12,5 +12,7 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      - key: GEMINI_MODEL
+        value: "gemini-3.6-flash"
       - key: PAPER
         value: "True"

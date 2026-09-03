@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = Field(..., description="Google Gemini API Key")
     
     # Model
-    GEMINI_MODEL: str = Field(default="gemini-1.5-flash", description="Gemini Model ID")
+    GEMINI_MODEL: str = Field(default="gemini-3.6-flash", description="Gemini Model ID")
     
     # Execution Mode
     TRADING_MODE: str = Field(default="paper", description="Execution mode: 'paper' or 'demo'")
