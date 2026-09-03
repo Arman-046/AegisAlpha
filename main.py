@@ -592,11 +592,17 @@ async def autonomous_loop():
     log.info("Starting Tier 3 Autonomous Trading Loop (Event-Driven)")
     
     if not run_preflight_checks():
-        log.error("Preflight failed. Exiting.")
+        msg = "Preflight failed. Exiting."
+        log.error(msg)
+        obs.heartbeat("CRASHED")
+        obs.set_terminal_state("FATAL ERROR", msg)
         return
         
     if not reconcile_state():
-        log.error("State recovery failed. Exiting.")
+        msg = "State recovery failed. Exiting."
+        log.error(msg)
+        obs.heartbeat("CRASHED")
+        obs.set_terminal_state("FATAL ERROR", msg)
         return
         
     start_equity = None
@@ -604,7 +610,10 @@ async def autonomous_loop():
         acct = trading_client.get_account()
         start_equity = float(acct.equity)
     except Exception as e:
-        log.error(f"Failed to get account equity: {e}")
+        msg = f"Failed to get account equity: {e}"
+        log.error(msg)
+        obs.heartbeat("CRASHED")
+        obs.set_terminal_state("FATAL ERROR", msg)
         return
         
     log.info(f"Starting Equity: ${start_equity:.2f}")
@@ -671,5 +680,11 @@ if __name__ == "__main__":
         log.info("Shutting down manually.")
     except Exception as e:
         log.error(f"Fatal error: {e}")
+        try:
+            from state.observability import obs
+            obs.heartbeat("CRASHED")
+            obs.set_terminal_state("FATAL ERROR", str(e))
+        except Exception:
+            pass
     finally:
         main_loop.close()

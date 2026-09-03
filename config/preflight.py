@@ -12,6 +12,7 @@ load_dotenv()
 
 # We import settings after load_dotenv so it picks up the env vars
 from config.settings import settings
+from state.observability import obs
 
 log = get_logger(__name__)
 
@@ -36,7 +37,10 @@ def run_preflight_checks():
         os.remove(test_file)
         log.info("State and logs directories are writable.")
     except Exception as e:
-        log.error(f"Cannot write to required directories: {e}")
+        msg = f"Cannot write to required directories: {e}"
+        log.error(msg)
+        obs.heartbeat("CRASHED")
+        obs.set_terminal_state("PREFLIGHT FAILED", msg)
         sys.exit(1)
 
     # 3. Alpaca Connectivity
@@ -48,14 +52,23 @@ def run_preflight_checks():
         )
         account = trading_client.get_account()
         if account.status.name != "ACTIVE":
-            log.error(f"Alpaca account is not ACTIVE. Status: {account.status}")
+            msg = f"Alpaca account is not ACTIVE. Status: {account.status}"
+            log.error(msg)
+            obs.heartbeat("CRASHED")
+            obs.set_terminal_state("PREFLIGHT FAILED", msg)
             sys.exit(1)
         log.info(f"Alpaca connectivity verified. Account status: {account.status.name}")
     except APIError as e:
-        log.error(f"Alpaca API connection failed: {e}")
+        msg = f"Alpaca API connection failed: {e}. Check API Keys!"
+        log.error(msg)
+        obs.heartbeat("CRASHED")
+        obs.set_terminal_state("PREFLIGHT FAILED", msg)
         sys.exit(1)
     except Exception as e:
-        log.error(f"Unexpected error connecting to Alpaca: {e}")
+        msg = f"Unexpected error connecting to Alpaca: {e}"
+        log.error(msg)
+        obs.heartbeat("CRASHED")
+        obs.set_terminal_state("PREFLIGHT FAILED", msg)
         sys.exit(1)
 
     # 4. Groq Connectivity
@@ -64,7 +77,10 @@ def run_preflight_checks():
         client = Groq(api_key=settings.GROQ_API_KEY)
         log.info(f"Groq initialized with model ID: {settings.GROQ_MODEL}")
     except Exception as e:
-        log.error(f"Groq client initialization failed: {e}")
+        msg = f"Groq client initialization failed: {e}. Check API Key!"
+        log.error(msg)
+        obs.heartbeat("CRASHED")
+        obs.set_terminal_state("PREFLIGHT FAILED", msg)
         sys.exit(1)
         
     log.info("All preflight checks passed.")
