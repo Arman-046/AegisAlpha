@@ -279,17 +279,20 @@ with col2:
         </div>
     """
 
+    wl_state = obs.get("watchlist", {}) if obs else {}
+    wl_status = wl_state.get("status", "UNKNOWN")
+    wl_last = wl_state.get("last_refresh", 0)
+    wl_next = wl_state.get("next_refresh", 0)
+    wl_picks = wl_state.get("picks", [])
+
+    active_symbols = [p.get("symbol") for p in wl_picks] if wl_picks else settings.WATCHLIST
+
     tags_html = ""
-    for s in settings.WATCHLIST:
+    for s in active_symbols:
         tags_html += f"<span class='tag tag-active'>{s} <span class='blinking-dot'>●</span></span>"
     st.markdown((html_content + tags_html + "</div>").replace('\n', ''), unsafe_allow_html=True)
 
 # 2. INTELLIGENT WATCHLIST
-wl_state = obs.get("watchlist", {}) if obs else {}
-wl_status = wl_state.get("status", "UNKNOWN")
-wl_last = wl_state.get("last_refresh", 0)
-wl_next = wl_state.get("next_refresh", 0)
-wl_picks = wl_state.get("picks", [])
 
 st.markdown("### AEGISALPHA INTELLIGENT WATCHLIST")
 
