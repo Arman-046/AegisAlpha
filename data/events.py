@@ -10,6 +10,7 @@ class Event:
     magnitude: float
     source: str
     market_context: str
+    is_simulated: bool = False
     
     def to_dict(self) -> Dict[str, Any]:
         return {

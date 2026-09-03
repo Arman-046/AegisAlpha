@@ -70,7 +70,8 @@ async def process_symbol(event: Event, open_positions: int) -> dict | None:
     
     if not trader_decision:
         log.error(f"Pipeline failure for {symbol}. Evaluation aborted.")
-        memory.add_decision(symbol, "neutral", 0.0, "FAILED", "AI UNAVAILABLE: Gemini API failure", event=event, is_counterfactual=False)
+        mode_val = "DEMO" if event.is_simulated else "LIVE_PAPER"
+        memory.add_decision(symbol, "neutral", 0.0, "FAILED", "AI UNAVAILABLE: Gemini API failure", event=event, is_counterfactual=False, mode=mode_val)
         obs.set_terminal_state("AI UNAVAILABLE", "Gemini reasoning failed or returned empty.")
         obs.log_error("AI", f"Gemini API failure during evaluation for {symbol}")
         obs.increment_stat("ai_failures")
@@ -78,14 +79,16 @@ async def process_symbol(event: Event, open_positions: int) -> dict | None:
         
     if trader_decision.direction == "neutral":
         log.info(f"Trader passed on {symbol} (Neutral or below threshold)")
-        memory.add_decision(symbol, "neutral", trader_decision.confidence, "PASSED", "No strong signal", event=event, trader_synthesis=trader_decision.synthesis, is_counterfactual=True)
+        mode_val = "DEMO" if event.is_simulated else "LIVE_PAPER"
+        memory.add_decision(symbol, "neutral", trader_decision.confidence, "PASSED", "No strong signal", event=event, trader_synthesis=trader_decision.synthesis, is_counterfactual=True, mode=mode_val)
         obs.set_terminal_state("AI THESIS NEUTRAL", f"Trader decided neutral ({trader_decision.confidence:.2f} confidence).")
         obs.log_activity(f"Trader decided neutral for {symbol}")
         return None
         
     if not risk_decision or not risk_decision.approved:
         log.warning(f"Risk Manager vetoed {symbol} ({risk_decision.rationale if risk_decision else 'No response'})")
-        memory.add_decision(symbol, trader_decision.direction, trader_decision.confidence, "VETOED", "Risk manager rejected", event=event, trader_synthesis=trader_decision.synthesis, is_counterfactual=True)
+        mode_val = "DEMO" if event.is_simulated else "LIVE_PAPER"
+        memory.add_decision(symbol, trader_decision.direction, trader_decision.confidence, "VETOED", "Risk manager rejected", event=event, trader_synthesis=trader_decision.synthesis, is_counterfactual=True, mode=mode_val)
         obs.set_terminal_state("RISK LIMIT EXCEEDED", f"Risk engine vetoed: {risk_decision.rationale if risk_decision else 'No response'}")
         obs.log_activity(f"Risk engine vetoed {symbol}")
         obs.increment_stat("risk_rejections")
@@ -102,7 +105,8 @@ async def process_symbol(event: Event, open_positions: int) -> dict | None:
     
     if not selected_contract or not snapshot:
         log.info(f"No valid contract found for {symbol}")
-        memory.add_decision(symbol, trader_decision.direction, risk_decision.adjusted_confidence, "NO_CONTRACT", "Filtered out deterministically", event=event, trader_synthesis=trader_decision.synthesis, is_counterfactual=True)
+        mode_val = "DEMO" if event.is_simulated else "LIVE_PAPER"
+        memory.add_decision(symbol, trader_decision.direction, risk_decision.adjusted_confidence, "NO_CONTRACT", "Filtered out deterministically", event=event, trader_synthesis=trader_decision.synthesis, is_counterfactual=True, mode=mode_val)
         obs.set_terminal_state("OPTION REJECTED", "Available option contracts did not meet configured requirements.")
         obs.update_stage("OPTION", "FAILED")
         return None
@@ -111,7 +115,8 @@ async def process_symbol(event: Event, open_positions: int) -> dict | None:
     
     if not is_valid:
         log.info(f"Snapshot validation failed for {selected_contract}: {reject_reason}")
-        memory.add_decision(symbol, trader_decision.direction, risk_decision.adjusted_confidence, "VALIDATION_FAILED", f"Quantitative validation failed: {reject_reason}", event=event, trader_synthesis=trader_decision.synthesis, is_counterfactual=True)
+        mode_val = "DEMO" if event.is_simulated else "LIVE_PAPER"
+        memory.add_decision(symbol, trader_decision.direction, risk_decision.adjusted_confidence, "VALIDATION_FAILED", f"Quantitative validation failed: {reject_reason}", event=event, trader_synthesis=trader_decision.synthesis, is_counterfactual=True, mode=mode_val)
         obs.set_terminal_state(reject_reason, f"Quantitative validation failed: {reject_reason}")
         obs.update_stage("OPTION", "FAILED")
         return None
@@ -157,7 +162,8 @@ async def process_symbol(event: Event, open_positions: int) -> dict | None:
     # Check minimum rank score
     if score < settings.MIN_RANK_SCORE_THRESHOLD:
         log.info(f"Rejected {symbol}: Rank Score {score:.2f} is below threshold {settings.MIN_RANK_SCORE_THRESHOLD}.")
-        memory.add_decision(symbol, trader_decision.direction, risk_decision.adjusted_confidence, "RANK_REJECTED", f"Score {score:.2f} < threshold", event=event, trader_synthesis=trader_decision.synthesis, quant_metrics=quant_metrics, rank_score=score, option_candidate=selected_contract, is_counterfactual=True)
+        mode_val = "DEMO" if event.is_simulated else "LIVE_PAPER"
+        memory.add_decision(symbol, trader_decision.direction, risk_decision.adjusted_confidence, "RANK_REJECTED", f"Score {score:.2f} < threshold", event=event, trader_synthesis=trader_decision.synthesis, quant_metrics=quant_metrics, rank_score=score, option_candidate=selected_contract, is_counterfactual=True, mode=mode_val)
         obs.set_terminal_state("RANK SCORE TOO LOW", f"Rank score {score:.2f} is below minimum {settings.MIN_RANK_SCORE_THRESHOLD}.")
         obs.update_stage("RANK", "FAILED")
         obs.increment_stat("rank_rejections")
@@ -171,11 +177,44 @@ async def process_symbol(event: Event, open_positions: int) -> dict | None:
 async def execute_opportunity(top_opp: dict, engine: ExecutionEngine = None, current_positions=None, current_loop_equity: float = None):
     try:
         obs.update_stage("EXECUTE", "PROCESSING")
+        
+        event_obj = top_opp.get('event')
+        if event_obj is None or not hasattr(event_obj, 'is_simulated'):
+            log.error("CRITICAL: Missing or unknown event simulation state. Failing closed.")
+            obs.update_stage("EXECUTE", "FAILED")
+            obs.set_terminal_state("SAFETY REJECTION", "Missing event simulation state.")
+            return
+            
+        is_simulated_event = event_obj.is_simulated
+        
+        if settings.TRADING_MODE == "paper" and is_simulated_event:
+            log.error("CRITICAL: Simulated event reached PAPER execution path. Failing closed.")
+            obs.update_stage("EXECUTE", "FAILED")
+            obs.set_terminal_state("SAFETY REJECTION", "Simulated event in paper mode.")
+            return
+            
+        if settings.TRADING_MODE == "demo" and not is_simulated_event:
+            log.error("CRITICAL: Live event reached DEMO execution path. Failing closed.")
+            obs.update_stage("EXECUTE", "FAILED")
+            obs.set_terminal_state("SAFETY REJECTION", "Live event in demo mode.")
+            return
+            
+        mode_val = "DEMO" if settings.TRADING_MODE == "demo" else "LIVE_PAPER"
+        
         if engine is None:
-            engine = LivePaperExecutionEngine()
+            if settings.TRADING_MODE == "demo":
+                from execution.engine import DemoExecutionEngine
+                from state.demo_portfolio import demo_portfolio
+                engine = DemoExecutionEngine(demo_portfolio)
+            else:
+                engine = LivePaperExecutionEngine()
             
         if current_positions is None:
-            current_positions = trading_client.get_all_positions()
+            if settings.TRADING_MODE == "demo":
+                from state.demo_portfolio import demo_portfolio
+                current_positions = demo_portfolio.get_mock_alpaca_positions()
+            else:
+                current_positions = trading_client.get_all_positions()
             
         if not validate_max_open_positions(len(current_positions)):
             log.info("Max positions reached during execution loop. Stopping further executions.")
@@ -186,8 +225,12 @@ async def execute_opportunity(top_opp: dict, engine: ExecutionEngine = None, cur
         log.info(f"Evaluating execution for candidate: {top_opp['contract']}")
         
         if current_loop_equity is None:
-            acct_loop = trading_client.get_account()
-            current_loop_equity = float(acct_loop.equity)
+            if settings.TRADING_MODE == "demo":
+                from state.demo_portfolio import demo_portfolio
+                current_loop_equity = demo_portfolio.cash
+            else:
+                acct_loop = trading_client.get_account()
+                current_loop_equity = float(acct_loop.equity)
         
         qty, risk = calculate_final_position_size(
             symbol=top_opp['symbol'],
@@ -212,7 +255,8 @@ async def execute_opportunity(top_opp: dict, engine: ExecutionEngine = None, cur
                 top_opp['confidence'], "EXECUTED", top_opp['rationale'],
                 event=top_opp.get('event'), quant_metrics=top_opp.get('quant_metrics'),
                 rank_score=top_opp.get('rank_score'), option_candidate=top_opp.get('contract'),
-                trader_synthesis=top_opp.get('synthesis'), is_counterfactual=False
+                trader_synthesis=top_opp.get('synthesis'), is_counterfactual=False,
+                mode=mode_val
             )
             obs.update_stage("EXECUTE", "COMPLETED")
             obs.update_stage("MONITOR", "COMPLETED")
@@ -226,7 +270,8 @@ async def execute_opportunity(top_opp: dict, engine: ExecutionEngine = None, cur
                 top_opp['confidence'], "FAILED_EXECUTION", "Order rejected or failed",
                 event=top_opp.get('event'), quant_metrics=top_opp.get('quant_metrics'),
                 rank_score=top_opp.get('rank_score'), option_candidate=top_opp.get('contract'),
-                trader_synthesis=top_opp.get('synthesis'), is_counterfactual=True
+                trader_synthesis=top_opp.get('synthesis'), is_counterfactual=True,
+                mode=mode_val
             )
             obs.update_stage("EXECUTE", "FAILED")
             obs.set_terminal_state("FAILED EXECUTION", "Order rejected or failed.")
@@ -239,7 +284,8 @@ async def execute_opportunity(top_opp: dict, engine: ExecutionEngine = None, cur
             top_opp['confidence'], "RISK_REJECTED", str(e),
             event=top_opp.get('event'), quant_metrics=top_opp.get('quant_metrics'),
             rank_score=top_opp.get('rank_score'), option_candidate=top_opp.get('contract'),
-            trader_synthesis=top_opp.get('synthesis'), is_counterfactual=True
+            trader_synthesis=top_opp.get('synthesis'), is_counterfactual=True,
+            mode=mode_val
         )
         obs.update_stage("EXECUTE", "FAILED")
         obs.set_terminal_state("RISK LIMIT EXCEEDED", f"Risk engine vetoed at execution: {e}")
@@ -461,6 +507,79 @@ async def watchlist_refresh_loop():
             
         await asyncio.sleep(settings.WATCHLIST_REFRESH_INTERVAL)
 
+async def check_demo_trigger():
+    """Background task to watch for state/demo_trigger.json IPC requests."""
+    trigger_file = "state/demo_trigger.json"
+    consumed_ids = set()
+    
+    while True:
+        if settings.TRADING_MODE == "demo" and os.path.exists(trigger_file):
+            try:
+                # Use a lightweight atomic rename approach where possible, or just read carefully
+                temp_file = trigger_file + ".tmp_read"
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+                # Try rename to acquire lock
+                try:
+                    os.rename(trigger_file, temp_file)
+                except OSError:
+                    # File might be locked by writer, skip this cycle
+                    pass
+                else:
+                    with open(temp_file, "r") as f:
+                        data = json.load(f)
+                    
+                    req_id = data.get("request_id")
+                    if req_id and req_id not in consumed_ids:
+                        req_time_str = data.get("requested_at")
+                        
+                        # Validate expiration (e.g. 60 seconds)
+                        if req_time_str:
+                            try:
+                                req_time = datetime.fromisoformat(req_time_str.replace("Z", "+00:00")).timestamp()
+                                if time.time() - req_time > 60:
+                                    log.warning(f"Ignored stale demo trigger {req_id}")
+                                    consumed_ids.add(req_id)
+                                    os.remove(temp_file)
+                                    continue
+                            except ValueError:
+                                pass
+                                
+                        scenario = data.get("scenario")
+                        log.info(f"Processing DEMO trigger: {scenario} (ID: {req_id})")
+                        
+                        if scenario in ["approved_trade", "risk_rejection"]:
+                            # Mock portfolio cash injection for Risk Governor testing
+                            from state.demo_portfolio import demo_portfolio
+                            if scenario == "approved_trade":
+                                demo_portfolio.cash = 100000.0
+                                sym = "MSFT"
+                                magnitude = 0.02
+                                ctx = "Simulated positive earnings surprise."
+                            elif scenario == "risk_rejection":
+                                demo_portfolio.cash = 1000.0  # Too low, will fail 2% limit
+                                sym = "AAPL"
+                                magnitude = -0.05
+                                ctx = "Simulated negative guidance."
+                                
+                            event = Event(
+                                timestamp=time.time(),
+                                symbol=sym,
+                                event_type="DEMO_TRIGGER",
+                                magnitude=magnitude,
+                                source="DEMO",
+                                market_context=ctx,
+                                is_simulated=True
+                            )
+                            asyncio.run_coroutine_threadsafe(trigger_pipeline(event), main_loop)
+                            
+                        consumed_ids.add(req_id)
+                    os.remove(temp_file)
+            except Exception as e:
+                log.error(f"Error processing demo trigger: {e}")
+                
+        await asyncio.sleep(2)
+
 async def autonomous_loop():
     global main_loop
     main_loop = asyncio.get_running_loop()
@@ -489,6 +608,8 @@ async def autonomous_loop():
     
     asyncio.create_task(heartbeat_loop())
     asyncio.create_task(watchlist_refresh_loop())
+    if settings.TRADING_MODE == "demo":
+        asyncio.create_task(check_demo_trigger())
     
     # Periodic background loop for state reconciliation and position monitoring
     while True:

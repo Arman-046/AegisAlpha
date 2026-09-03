@@ -54,7 +54,8 @@ class DecisionMemory:
         quant_metrics: Dict[str, Any] = None,
         rank_score: float = 0.0,
         option_candidate: str = "",
-        is_counterfactual: bool = False
+        is_counterfactual: bool = False,
+        mode: str = "LIVE_PAPER"
     ):
         import time
         entry = {
@@ -72,7 +73,8 @@ class DecisionMemory:
             "quant_metrics": quant_metrics or {},
             "rank_score": rank_score,
             "option_candidate": option_candidate,
-            "is_counterfactual": is_counterfactual
+            "is_counterfactual": is_counterfactual,
+            "mode": mode
         }
         self.history.append(entry)
         self._save_state()
@@ -80,7 +82,7 @@ class DecisionMemory:
     def update_last_trade_pl(self, symbol: str, realized_pl: float):
         """Updates the P&L of the most recent trade for this symbol."""
         for entry in reversed(self.history):
-            if entry["symbol"] == symbol and entry["action"] == "EXECUTED":
+            if entry["symbol"] == symbol and entry["action"] == "EXECUTED" and entry.get("mode") == "LIVE_PAPER":
                 entry["realized_pl"] = realized_pl
                 break
         self._save_state()
@@ -92,8 +94,8 @@ class DecisionMemory:
         Net negative -> Raise confidence threshold.
         Improving results -> Move threshold back toward baseline.
         """
-        # Look at the last 5 executed trades
-        recent_trades = [e for e in self.history if e["action"] == "EXECUTED"][-5:]
+        # Look at the last 5 executed trades (LIVE_PAPER only)
+        recent_trades = [e for e in self.history if e["action"] == "EXECUTED" and e.get("mode") == "LIVE_PAPER"][-5:]
         if not recent_trades:
             return
 

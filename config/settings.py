@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     # Model
     GEMINI_MODEL: str = Field(default="gemini-1.5-flash", description="Gemini Model ID")
     
+    # Execution Mode
+    TRADING_MODE: str = Field(default="paper", description="Execution mode: 'paper' or 'demo'")
+    
     # Paper Trading Safety
     PAPER: bool = Field(default=True, description="Must be true for paper trading")
     
@@ -59,6 +62,20 @@ class Settings(BaseSettings):
     def validate_paper(cls, v):
         if not v:
             raise ValueError("PAPER must be True. Live trading is not permitted.")
+        return v
+        
+    @field_validator("TRADING_MODE")
+    def validate_trading_mode(cls, v):
+        if v not in ["paper", "demo"]:
+            raise ValueError("TRADING_MODE must be 'paper' or 'demo'")
+        return v
+        
+    @field_validator("APCA_API_KEY_ID")
+    def validate_api_key(cls, v, info):
+        # Allow PK_DUMMY only if TRADING_MODE is demo
+        mode = info.data.get('TRADING_MODE', 'paper')
+        if v == "PK_DUMMY" and mode != "demo":
+            raise ValueError("PK_DUMMY is only allowed in TRADING_MODE=demo")
         return v
         
     @field_validator("MAX_RISK_PERCENT")

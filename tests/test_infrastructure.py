@@ -38,7 +38,7 @@ async def test_gemini_failure_returns_failed(memory_mock, mock_fetchers):
         assert result is None
         memory_mock.add_decision.assert_called_once_with(
             "AAPL", "neutral", 0.0, "FAILED", "AI UNAVAILABLE: Gemini API failure",
-            event=event, is_counterfactual=False
+            event=event, is_counterfactual=False, mode="LIVE_PAPER"
         )
 
 @pytest.mark.asyncio
@@ -59,7 +59,7 @@ async def test_genuine_neutral_decision(memory_mock, mock_fetchers):
         assert result is None
         memory_mock.add_decision.assert_called_once_with(
             "AAPL", "neutral", 0.4, "PASSED", "No strong signal",
-            event=event, trader_synthesis="No signal", is_counterfactual=True
+            event=event, trader_synthesis="No signal", is_counterfactual=True, mode="LIVE_PAPER"
         )
 
 def test_event_detector_polling():

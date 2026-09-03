@@ -9,7 +9,7 @@ from alpaca.trading.client import TradingClient
 # Must be the first Streamlit command
 st.set_page_config(
     page_title="AegisAlpha | Autonomous Agent",
-    page_icon="aegisalpha_logo_v2.png",
+    page_icon="premium_logo.png",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -37,13 +37,18 @@ st.markdown("""
     
     /* Cards */
     .premium-card {
-        background: linear-gradient(145deg, #111827, #0f172a);
+        background: linear-gradient(145deg, #0f172a, #0b0f19);
         border: 1px solid #1e293b;
-        border-radius: 12px;
+        border-radius: 16px;
         padding: 24px;
         margin-bottom: 24px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .premium-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        border-color: #334155;
     }
     
     .status-badge {
@@ -181,12 +186,26 @@ def time_ago(ts):
     if diff < 60: return f"{int(diff)} seconds ago"
     return f"{int(diff/60)} minutes ago"
 
-st.markdown("""
-<div style="text-align: center; margin-bottom: 2rem;">
-    <h1 style="margin-bottom: 0; color: #38bdf8; font-weight: 800; letter-spacing: 2px;">AEGISALPHA</h1>
-    <p style="color: #94a3b8; font-size: 1.1rem; margin-top: 0.5rem; text-transform: uppercase; letter-spacing: 1px;">Autonomous Event-Driven AI Trading</p>
+import base64
+def get_base64_of_bin_file(bin_file):
+    try:
+        with open(bin_file, 'rb') as f:
+            data = f.read()
+        return base64.b64encode(data).decode()
+    except:
+        return ""
+
+logo_base64 = get_base64_of_bin_file("premium_logo.png")
+logo_html = f'<img src="data:image/png;base64,{logo_base64}" width="180" style="margin-bottom: 1rem; filter: drop-shadow(0 0 15px rgba(16, 185, 129, 0.4)); border-radius: 12px;" />' if logo_base64 else ''
+
+st.markdown(f"""
+<div style="text-align: center; margin-bottom: 3rem; margin-top: 1rem;">
+    {logo_html}
+    <h1 style="margin-bottom: 0; color: #10b981; font-weight: 800; letter-spacing: 3px; text-shadow: 0 0 20px rgba(16, 185, 129, 0.3); font-size: 3rem;">AEGISALPHA</h1>
+    <p style="color: #94a3b8; font-size: 1.1rem; margin-top: 0.5rem; text-transform: uppercase; letter-spacing: 2px; font-weight: 600;">Autonomous Event-Driven AI Trading</p>
+    <div style="width: 100px; height: 3px; background: linear-gradient(90deg, transparent, #10b981, transparent); margin: 1.5rem auto 0 auto;"></div>
 </div>
-""".replace('\n', ''), unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # 1. WHAT IS AEGISALPHA DOING RIGHT NOW?
 col1, col2 = st.columns([2, 1])
@@ -195,7 +214,7 @@ with col1:
     st.markdown("### SYSTEM STATUS")
     
     is_live = "LIVE PAPER" if settings.PAPER else "LIVE"
-    is_demo = settings.APCA_API_KEY_ID == "PK_DUMMY"
+    is_demo = settings.TRADING_MODE == "demo"
     env_badge = "🔵 DEMO MODE — SIMULATION ONLY (NO REAL ORDERS)" if is_demo else f"🟢 {is_live} — REAL ALPACA PAPER ACCOUNT"
     
     agent_status = obs.get("status", "STOPPED") if obs else "STOPPED"
@@ -264,6 +283,34 @@ with col2:
     for s in settings.WATCHLIST:
         tags_html += f"<span class='tag tag-active'>{s} <span class='blinking-dot'>●</span></span>"
     st.markdown((html_content + tags_html + "</div>").replace('\n', ''), unsafe_allow_html=True)
+    
+    if is_demo:
+        st.markdown("### DEMONSTRATION CONTROLS")
+        st.markdown("<div style='font-size: 0.9rem; color: #94a3b8; margin-bottom: 12px;'>Trigger controlled simulation scenarios. The AI will evaluate real/mocked data and run through the deterministic pipeline.</div>", unsafe_allow_html=True)
+        col_btn1, col_btn2 = st.columns(2)
+        
+        def write_demo_trigger(scenario):
+            import uuid
+            trigger_file = "state/demo_trigger.json"
+            temp_file = trigger_file + ".tmp_write"
+            data = {
+                "request_id": str(uuid.uuid4()),
+                "scenario": scenario,
+                "requested_at": datetime.now(timezone.utc).isoformat(),
+                "status": "PENDING"
+            }
+            # Atomic write
+            with open(temp_file, "w") as f:
+                json.dump(data, f)
+            os.replace(temp_file, trigger_file)
+            st.toast(f"Demo trigger sent: {scenario}", icon="🚀")
+            
+        with col_btn1:
+            if st.button("▶️ SCENARIO A: APPROVED TRADE", use_container_width=True):
+                write_demo_trigger("approved_trade")
+        with col_btn2:
+            if st.button("▶️ SCENARIO B: RISK REJECTION", use_container_width=True):
+                write_demo_trigger("risk_rejection")
 
 # 2. INTELLIGENT WATCHLIST
 wl_state = obs.get("watchlist", {}) if obs else {}
@@ -555,11 +602,12 @@ else:
     live_actions = ["EXECUTED", "FAILED_EXECUTION"]
     cf_actions = ["PASSED", "VETOED", "NO_CONTRACT", "VALIDATION_FAILED", "RANK_REJECTED", "RISK_REJECTED"]
     
-    executed = [h for h in history if h.get("action") in live_actions]
-    counterfactuals = [h for h in history if h.get("action") in cf_actions]
-    failures = [h for h in history if h.get("action") not in live_actions and h.get("action") not in cf_actions]
+    executed = [h for h in history if h.get("action") in live_actions and h.get("mode") == "LIVE_PAPER"]
+    demo_executed = [h for h in history if h.get("mode") == "DEMO"]
+    counterfactuals = [h for h in history if h.get("action") in cf_actions and h.get("mode") != "DEMO"]
+    failures = [h for h in history if h.get("action") not in live_actions and h.get("action") not in cf_actions and h.get("mode") != "DEMO"]
     
-    tab1, tab2, tab3 = st.tabs(["🔴 LIVE EXECUTIONS", "🟡 COUNTERFACTUALS (WHAT-IF)", "⚙️ SYSTEM FAILURES"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🔴 LIVE PAPER EXECUTIONS", "🔵 DEMO SIMULATIONS", "🟡 COUNTERFACTUALS (WHAT-IF)", "⚙️ SYSTEM FAILURES"])
     
     with tab1:
         if not executed:
@@ -584,6 +632,29 @@ else:
                 """, unsafe_allow_html=True)
                 
     with tab2:
+        st.markdown("<div style='background-color: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; padding: 12px; border-radius: 6px; margin-bottom: 20px; font-size: 0.9rem;'><strong>NOTE:</strong> These are strictly simulated demo trades running through the AegisAlpha engine for demonstration purposes. They are mathematically excluded from Live Paper statistics.</div>", unsafe_allow_html=True)
+        if not demo_executed:
+            st.markdown("<div style='padding: 20px; color: #94a3b8; text-align: center;'>No demo simulations recorded yet.</div>", unsafe_allow_html=True)
+        else:
+            for item in reversed(demo_executed):
+                ts = format_time(item.get("timestamp"))
+                sym = item.get("symbol", "")
+                dir_color = "#38bdf8"
+                action_color = "#10b981" if "EXECUTED" in item.get("action") else "#ef4444"
+                
+                st.markdown(f"""
+                <div class='premium-card' style='border-left: 4px solid {dir_color};'>
+                    <div style='display: flex; justify-content: space-between;'>
+                        <strong style='font-size: 1.2rem; color: #f8fafc;'>{sym} - DEMO {item.get('action')}</strong>
+                        <span style='color: #64748b;'>{ts}</span>
+                    </div>
+                    <div style='color: {action_color}; font-size: 0.9rem; margin-top: 8px;'><strong>Outcome:</strong> {item.get('reason')}</div>
+                    <div style='color: #38bdf8; font-size: 0.85rem; margin-top: 4px;'>Event: {item.get('event', 'Unknown')}</div>
+                    <div style='color: #cbd5e1; margin-top: 8px; font-size: 0.95rem;'><strong>Synthesis:</strong> {item.get('trader_synthesis', 'N/A')}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+    with tab3:
         st.markdown("<div style='background-color: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); color: #f59e0b; padding: 12px; border-radius: 6px; margin-bottom: 20px; font-size: 0.9rem;'><strong>NOTE:</strong> Counterfactuals are strictly separated from live statistics. These represent rejected candidates, fail-closed validations, and AI logic paths that did not result in trades.</div>", unsafe_allow_html=True)
         if not counterfactuals:
             st.markdown("<div style='padding: 20px; color: #94a3b8; text-align: center;'>No counterfactuals recorded yet.</div>", unsafe_allow_html=True)
@@ -609,7 +680,7 @@ else:
                 </div>
                 """, unsafe_allow_html=True)
                 
-    with tab3:
+    with tab4:
         st.markdown("<div style='background-color: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; padding: 12px; border-radius: 6px; margin-bottom: 20px; font-size: 0.9rem;'><strong>NOTE:</strong> System Failures (e.g. AI API timeouts, stale data, malformed schema) are aborted evaluations. They are neither live trades nor counterfactual considerations.</div>", unsafe_allow_html=True)
         if not failures:
             st.markdown("<div style='padding: 20px; color: #94a3b8; text-align: center;'>No system failures recorded.</div>", unsafe_allow_html=True)
