@@ -27,13 +27,24 @@ from state.observability import obs
 
 log = get_logger(__name__)
 
-class AnalystDecision(BaseModel):
+class BullDecision(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
-    rationale: str
+    supporting_evidence: str
+    expected_directional_impact: str
+    catalyst: str
+
+class BearDecision(BaseModel):
+    confidence: float = Field(ge=0.0, le=1.0)
+    challenge_event: str
+    noise_reasoning: str
+    risks: str
+    evidence_against_thesis: str
 
 class TraderDecision(BaseModel):
     direction: Literal["bullish", "bearish", "neutral"]
+    opportunity_exists: bool
     confidence: float = Field(ge=0.0, le=1.0)
+    synthesis: str
     rationale: str
     
 class RiskDecision(BaseModel):
@@ -127,7 +138,7 @@ def get_gemini_tools() -> list:
     return [types.Tool(function_declarations=gemini_funcs)]
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception(is_transient_error), reraise=False, retry_error_callback=lambda rs: None)
-async def _run_analyst(symbol: str, prompt: str, system_prompt: str) -> AnalystDecision | None:
+async def _run_analyst(symbol: str, prompt: str, system_prompt: str, schema_class) -> Any:
     client = get_async_client()
     if not client: return None
     try:
@@ -137,14 +148,14 @@ async def _run_analyst(symbol: str, prompt: str, system_prompt: str) -> AnalystD
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
                 response_mime_type="application/json",
-                response_schema=AnalystDecision,
+                response_schema=schema_class,
                 temperature=0.0
             )
         )
         if not res.text:
             raise ValueError("Empty response from Gemini")
         data = json.loads(res.text)
-        return AnalystDecision(**data)
+        return schema_class(**data)
     except Exception as e:
         log.warning(f"Analyst error for {symbol}: {e}")
         raise e
@@ -254,8 +265,12 @@ async def evaluate_symbol_pipeline(symbol: str, bars_summary: str, news_summary:
     log.info(f"[{symbol}] Starting concurrent Bull and Bear Analyst evaluation with Gemini...")
     obs.update_stage("BULL", "PROCESSING")
     obs.update_stage("BEAR", "PROCESSING")
-    bull_task = asyncio.create_task(_run_analyst(symbol, analyst_prompt, BULL_SYSTEM_PROMPT))
-    bear_task = asyncio.create_task(_run_analyst(symbol, analyst_prompt, BEAR_SYSTEM_PROMPT))
+    
+    # We must redefine the retry decorator for the caller if we pass schema_class, 
+    # but since _run_analyst is already decorated, we just pass the class.
+    # We need to make sure the decorator works with Any return type.
+    bull_task = asyncio.create_task(_run_analyst(symbol, analyst_prompt, BULL_SYSTEM_PROMPT, BullDecision))
+    bear_task = asyncio.create_task(_run_analyst(symbol, analyst_prompt, BEAR_SYSTEM_PROMPT, BearDecision))
     
     try:
         bull_decision, bear_decision = await asyncio.gather(bull_task, bear_task)
@@ -275,8 +290,8 @@ async def evaluate_symbol_pipeline(symbol: str, bars_summary: str, news_summary:
     obs.update_stage("BULL", "COMPLETED")
     obs.update_stage("BEAR", "COMPLETED")
         
-    bull_arg = f"Conf: {bull_decision.confidence}, Rationale: {bull_decision.rationale}"
-    bear_arg = f"Conf: {bear_decision.confidence}, Rationale: {bear_decision.rationale}"
+    bull_arg = f"Conf: {bull_decision.confidence}, Catalyst: {bull_decision.catalyst}, Impact: {bull_decision.expected_directional_impact}, Evidence: {bull_decision.supporting_evidence}"
+    bear_arg = f"Conf: {bear_decision.confidence}, Challenge: {bear_decision.challenge_event}, Risks: {bear_decision.risks}, Evidence Against: {bear_decision.evidence_against_thesis}"
     
     # 2. Synthesize via Trader
     obs.update_stage("TRADER", "PROCESSING")

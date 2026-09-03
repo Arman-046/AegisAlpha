@@ -74,18 +74,24 @@ async def test_trigger_pipeline_hourly_limit():
         mock_process.return_value = None  # don't execute order
         with patch("main.is_market_open", return_value=True):
             with patch("main.trading_client.get_all_positions", return_value=[]):
+                from data.events import Event
+                import time
+                event1 = Event(timestamp=time.time(), symbol="AAPL", event_type="TEST", magnitude=0, source="TEST", market_context="Event 1")
                 # Run 1
-                await trigger_pipeline("AAPL", "Event 1")
+                await trigger_pipeline(event1)
                 assert mock_process.call_count == 1
                 
+                event2 = Event(timestamp=time.time(), symbol="AAPL", event_type="TEST", magnitude=0, source="TEST", market_context="Event 2")
                 # Run 2
-                await trigger_pipeline("AAPL", "Event 2")
+                await trigger_pipeline(event2)
                 assert mock_process.call_count == 2
                 
+                event3 = Event(timestamp=time.time(), symbol="AAPL", event_type="TEST", magnitude=0, source="TEST", market_context="Event 3")
                 # Run 3
-                await trigger_pipeline("AAPL", "Event 3")
+                await trigger_pipeline(event3)
                 assert mock_process.call_count == 3
                 
+                event4 = Event(timestamp=time.time(), symbol="AAPL", event_type="TEST", magnitude=0, source="TEST", market_context="Event 4")
                 # Run 4 - should be suppressed
-                await trigger_pipeline("AAPL", "Event 4")
+                await trigger_pipeline(event4)
                 assert mock_process.call_count == 3  # Did not increment

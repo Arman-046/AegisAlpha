@@ -84,7 +84,7 @@ class MCPClientWrapper:
 mcp_client = MCPClientWrapper()
 
 
-# Define the tools mapping for the Anthropic LLM (matching official names roughly)
+# Define the tools mapping for the Gemini LLM (matching official names roughly)
 ALPACA_MCP_TOOLS = [
     {
         "name": "get_account_info",

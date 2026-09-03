@@ -31,11 +31,14 @@ async def test_gemini_failure_returns_failed(memory_mock, mock_fetchers):
             return None, None
         mock_pipeline.side_effect = mock_coro
         
-        result = await process_symbol("AAPL", open_positions=0, event_context="Test")
+        from data.events import Event
+        event = Event(timestamp=time.time(), symbol="AAPL", event_type="TEST", magnitude=0, source="TEST", market_context="Test")
+        result = await process_symbol(event, open_positions=0)
         
         assert result is None
         memory_mock.add_decision.assert_called_once_with(
-            "AAPL", "neutral", 0.0, "FAILED", "AI UNAVAILABLE: Gemini API failure"
+            "AAPL", "neutral", 0.0, "FAILED", "AI UNAVAILABLE: Gemini API failure",
+            event=event, is_counterfactual=False
         )
 
 @pytest.mark.asyncio
@@ -45,15 +48,18 @@ async def test_genuine_neutral_decision(memory_mock, mock_fetchers):
     
     with patch("main.evaluate_symbol_pipeline", new_callable=MagicMock) as mock_pipeline:
         async def mock_coro(*args, **kwargs):
-            trader_decision = TraderDecision(direction="neutral", confidence=0.4, rationale="Not sure")
+            trader_decision = TraderDecision(direction="neutral", opportunity_exists=False, confidence=0.4, synthesis="No signal", rationale="Not sure")
             return trader_decision, None
         mock_pipeline.side_effect = mock_coro
         
-        result = await process_symbol("AAPL", open_positions=0, event_context="Test")
+        from data.events import Event
+        event = Event(timestamp=time.time(), symbol="AAPL", event_type="TEST", magnitude=0, source="TEST", market_context="Test")
+        result = await process_symbol(event, open_positions=0)
         
         assert result is None
         memory_mock.add_decision.assert_called_once_with(
-            "AAPL", "neutral", 0.4, "PASSED", "No strong signal"
+            "AAPL", "neutral", 0.4, "PASSED", "No strong signal",
+            event=event, trader_synthesis="No signal", is_counterfactual=True
         )
 
 def test_event_detector_polling():

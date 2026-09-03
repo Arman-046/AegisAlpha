@@ -533,3 +533,100 @@ with col8:
             </div>
         </div>
         """.replace('\n', ''), unsafe_allow_html=True)
+
+# 7. DECISION JOURNAL & COUNTERFACTUALS
+st.markdown("### 🗂️ DECISION JOURNAL (TRANSPARENCY LOG)")
+
+def load_memory():
+    mem_file = "state/memory.json"
+    if os.path.exists(mem_file):
+        try:
+            with open(mem_file, "r") as f:
+                return json.load(f).get("history", [])
+        except:
+            pass
+    return []
+
+history = load_memory()
+
+if not history:
+    st.markdown("<div class='premium-card' style='text-align: center; color: #94a3b8;'>No decisions recorded yet.</div>", unsafe_allow_html=True)
+else:
+    live_actions = ["EXECUTED", "FAILED_EXECUTION"]
+    cf_actions = ["PASSED", "VETOED", "NO_CONTRACT", "VALIDATION_FAILED", "RANK_REJECTED", "RISK_REJECTED"]
+    
+    executed = [h for h in history if h.get("action") in live_actions]
+    counterfactuals = [h for h in history if h.get("action") in cf_actions]
+    failures = [h for h in history if h.get("action") not in live_actions and h.get("action") not in cf_actions]
+    
+    tab1, tab2, tab3 = st.tabs(["🔴 LIVE EXECUTIONS", "🟡 COUNTERFACTUALS (WHAT-IF)", "⚙️ SYSTEM FAILURES"])
+    
+    with tab1:
+        if not executed:
+            st.markdown("<div style='padding: 20px; color: #94a3b8; text-align: center;'>No live trades executed yet.</div>", unsafe_allow_html=True)
+        else:
+            for item in reversed(executed):
+                ts = format_time(item.get("timestamp"))
+                sym = item.get("symbol", "")
+                dir_color = "#10b981" if item.get("direction") == "bullish" else "#ef4444" if item.get("direction") == "bearish" else "#94a3b8"
+                st.markdown(f"""
+                <div class='premium-card' style='border-left: 4px solid {dir_color};'>
+                    <div style='display: flex; justify-content: space-between;'>
+                        <strong style='font-size: 1.2rem; color: #f8fafc;'>{sym} - {item.get('action')}</strong>
+                        <span style='color: #64748b;'>{ts}</span>
+                    </div>
+                    <div style='color: #38bdf8; font-size: 0.9rem; margin-top: 8px;'>Event: {item.get('event', 'Unknown')}</div>
+                    <div style='color: #cbd5e1; margin-top: 8px; font-size: 0.95rem;'><strong>Synthesis:</strong> {item.get('trader_synthesis', item.get('reason'))}</div>
+                    <div style='margin-top: 8px; font-size: 0.85rem; color: #94a3b8;'>
+                        Option: {item.get('option_candidate', 'N/A')} | Rank Score: {item.get('rank_score', 0):.1f}/100 | AI Conf: {item.get('confidence', 0):.2f}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+    with tab2:
+        st.markdown("<div style='background-color: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); color: #f59e0b; padding: 12px; border-radius: 6px; margin-bottom: 20px; font-size: 0.9rem;'><strong>NOTE:</strong> Counterfactuals are strictly separated from live statistics. These represent rejected candidates, fail-closed validations, and AI logic paths that did not result in trades.</div>", unsafe_allow_html=True)
+        if not counterfactuals:
+            st.markdown("<div style='padding: 20px; color: #94a3b8; text-align: center;'>No counterfactuals recorded yet.</div>", unsafe_allow_html=True)
+        else:
+            for item in reversed(counterfactuals):
+                ts = format_time(item.get("timestamp"))
+                sym = item.get("symbol", "")
+                action = item.get("action", "")
+                reason = item.get("reason", "")
+                
+                action_color = "#ef4444"
+                if "NEUTRAL" in action or "PASSED" in action: action_color = "#94a3b8"
+                
+                st.markdown(f"""
+                <div class='premium-card' style='border-left: 2px dashed {action_color}; opacity: 0.85;'>
+                    <div style='display: flex; justify-content: space-between;'>
+                        <strong style='font-size: 1.1rem; color: #cbd5e1;'>{sym} - {action}</strong>
+                        <span style='color: #64748b;'>{ts}</span>
+                    </div>
+                    <div style='color: #ef4444; font-size: 0.9rem; margin-top: 8px;'><strong>Rejection:</strong> {reason}</div>
+                    <div style='color: #38bdf8; font-size: 0.85rem; margin-top: 4px;'>Event: {item.get('event', 'Unknown')}</div>
+                    <div style='color: #94a3b8; margin-top: 8px; font-size: 0.9rem;'><em>Synthesis: {item.get('trader_synthesis', 'No synthesis')}</em></div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+    with tab3:
+        st.markdown("<div style='background-color: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; padding: 12px; border-radius: 6px; margin-bottom: 20px; font-size: 0.9rem;'><strong>NOTE:</strong> System Failures (e.g. AI API timeouts, stale data, malformed schema) are aborted evaluations. They are neither live trades nor counterfactual considerations.</div>", unsafe_allow_html=True)
+        if not failures:
+            st.markdown("<div style='padding: 20px; color: #94a3b8; text-align: center;'>No system failures recorded.</div>", unsafe_allow_html=True)
+        else:
+            for item in reversed(failures):
+                ts = format_time(item.get("timestamp"))
+                sym = item.get("symbol", "")
+                action = item.get("action", "")
+                reason = item.get("reason", "")
+                st.markdown(f"""
+                <div class='premium-card' style='border-left: 2px solid #ef4444;'>
+                    <div style='display: flex; justify-content: space-between;'>
+                        <strong style='font-size: 1.1rem; color: #cbd5e1;'>{sym} - {action}</strong>
+                        <span style='color: #64748b;'>{ts}</span>
+                    </div>
+                    <div style='color: #ef4444; font-size: 0.9rem; margin-top: 8px;'><strong>Error:</strong> {reason}</div>
+                    <div style='color: #38bdf8; font-size: 0.85rem; margin-top: 4px;'>Event: {item.get('event', 'Unknown')}</div>
+                </div>
+                """, unsafe_allow_html=True)
+

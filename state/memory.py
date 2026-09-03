@@ -39,14 +39,40 @@ class DecisionMemory:
         except Exception as e:
             log.error(f"Failed to save memory state: {e}")
 
-    def add_decision(self, symbol: str, direction: str, confidence: float, action: str, reason: str, realized_pl: float = 0.0):
+    def add_decision(
+        self, 
+        symbol: str, 
+        direction: str, 
+        confidence: float, 
+        action: str, 
+        reason: str, 
+        realized_pl: float = 0.0,
+        event: Any = None,
+        bull_thesis: str = "",
+        bear_thesis: str = "",
+        trader_synthesis: str = "",
+        quant_metrics: Dict[str, Any] = None,
+        rank_score: float = 0.0,
+        option_candidate: str = "",
+        is_counterfactual: bool = False
+    ):
+        import time
         entry = {
+            "timestamp": time.time(),
             "symbol": symbol,
+            "event": event.market_context if event else "Periodic / Unknown",
             "direction": direction,
             "confidence": confidence,
             "action": action,
             "reason": reason,
-            "realized_pl": realized_pl
+            "realized_pl": realized_pl,
+            "bull_thesis": bull_thesis,
+            "bear_thesis": bear_thesis,
+            "trader_synthesis": trader_synthesis,
+            "quant_metrics": quant_metrics or {},
+            "rank_score": rank_score,
+            "option_candidate": option_candidate,
+            "is_counterfactual": is_counterfactual
         }
         self.history.append(entry)
         self._save_state()

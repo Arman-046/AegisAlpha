@@ -23,7 +23,7 @@ def clean_memory():
 @patch("main.evaluate_symbol_pipeline")
 @patch("main.fetch_option_contracts")
 @patch("main.select_contract_with_snapshot")
-@patch("main.validate_option_snapshot")
+@patch("main.validate_tradeability")
 async def test_valid_opportunity_path(
     mock_validate, mock_select_contract, mock_fetch_contracts, 
     mock_eval, mock_news, mock_bars
@@ -35,7 +35,9 @@ async def test_valid_opportunity_path(
     # 4-role pipeline output: Trader approves, Risk Manager approves
     trader_mock = MagicMock()
     trader_mock.direction = "bullish"
+    trader_mock.opportunity_exists = True
     trader_mock.confidence = 0.9
+    trader_mock.synthesis = "Looks good"
     trader_mock.rationale = "Bullish structure"
     
     risk_mock = MagicMock()
@@ -58,13 +60,17 @@ async def test_valid_opportunity_path(
     snapshot_mock.latest_quote.bid_price = 1.0
     snapshot_mock.latest_quote.ask_price = 1.1
     snapshot_mock.open_interest = 100
-    snapshot_mock.greeks = None
+    snapshot_mock.greeks = MagicMock()
+    snapshot_mock.greeks.delta = 0.5
     mock_select_contract.return_value = ("AAPL260116C00100000", snapshot_mock)
     
-    mock_validate.return_value = True
+    mock_validate.return_value = (True, "", {})
     
     # Run the process
-    result = await process_symbol("AAPL", 0)
+    from data.events import Event
+    import time
+    event = Event(timestamp=time.time(), symbol="AAPL", event_type="TEST", magnitude=0, source="TEST", market_context="Test")
+    result = await process_symbol(event, 0)
     
     # Ensure it returns a valid opportunity dictionary for execution
     assert result is not None
@@ -88,7 +94,9 @@ async def test_invalid_opportunity_path_risk_veto(
     # 4-role pipeline output: Trader approves, Risk Manager VETOS
     trader_mock = MagicMock()
     trader_mock.direction = "bullish"
+    trader_mock.opportunity_exists = True
     trader_mock.confidence = 0.8
+    trader_mock.synthesis = "Looks okay"
     trader_mock.rationale = "Looks okay"
     
     risk_mock = MagicMock()
@@ -98,7 +106,10 @@ async def test_invalid_opportunity_path_risk_veto(
     
     mock_eval.return_value = (trader_mock, risk_mock)
     
-    result = await process_symbol("TSLA", 0)
+    from data.events import Event
+    import time
+    event = Event(timestamp=time.time(), symbol="TSLA", event_type="TEST", magnitude=0, source="TEST", market_context="Test")
+    result = await process_symbol(event, 0)
     assert result is None
     # Ensure memory recorded the veto
     assert len(memory.history) > 0

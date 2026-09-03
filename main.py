@@ -12,13 +12,14 @@ from data.fetchers import (
     fetch_stock_bars, 
     fetch_news, 
     fetch_option_contracts, 
-    fetch_targeted_option_snapshots,
-    validate_option_snapshot
+    fetch_targeted_option_snapshots
 )
 from data.volatility import calculate_realized_volatility_percentile
+from data.events import Event
 from reasoning.agent import evaluate_symbol_pipeline
 from strategy.contract_selector import select_contract_with_snapshot
 from strategy.ranking import rank_opportunities
+from strategy.validation import validate_tradeability
 from state.memory import memory
 from state.recovery import reconcile_state
 from risk.hard_limits import (
@@ -44,9 +45,10 @@ last_eval_time = {}
 evals_this_hour = {}
 in_progress_evals = set()
 
-async def process_symbol(symbol: str, open_positions: int, event_context: str = "") -> dict | None:
+async def process_symbol(event: Event, open_positions: int) -> dict | None:
     """Processes a single symbol and returns an opportunity dict if valid."""
-    log.info(f"Analyzing {symbol} (Event: {event_context})")
+    symbol = event.symbol
+    log.info(f"Analyzing {symbol} (Event: {event.market_context})")
     
     obs.update_stage("DATA", "PROCESSING")
     bars = fetch_stock_bars(symbol)
@@ -63,12 +65,12 @@ async def process_symbol(symbol: str, open_positions: int, event_context: str = 
     # Run 4-role pipeline
     trader_decision, risk_decision = await evaluate_symbol_pipeline(
         symbol, bars_summary, news_summary, vol_regime, recent_context, 
-        memory.current_confidence_threshold, open_positions, event_context
+        memory.current_confidence_threshold, open_positions, event.market_context
     )
     
     if not trader_decision:
         log.error(f"Pipeline failure for {symbol}. Evaluation aborted.")
-        memory.add_decision(symbol, "neutral", 0.0, "FAILED", "AI UNAVAILABLE: Gemini API failure")
+        memory.add_decision(symbol, "neutral", 0.0, "FAILED", "AI UNAVAILABLE: Gemini API failure", event=event, is_counterfactual=False)
         obs.set_terminal_state("AI UNAVAILABLE", "Gemini reasoning failed or returned empty.")
         obs.log_error("AI", f"Gemini API failure during evaluation for {symbol}")
         obs.increment_stat("ai_failures")
@@ -76,15 +78,15 @@ async def process_symbol(symbol: str, open_positions: int, event_context: str = 
         
     if trader_decision.direction == "neutral":
         log.info(f"Trader passed on {symbol} (Neutral or below threshold)")
-        memory.add_decision(symbol, "neutral", trader_decision.confidence, "PASSED", "No strong signal")
-        obs.set_terminal_state("WAITING FOR EVENT", f"Trader decided neutral ({trader_decision.confidence:.2f} confidence).")
+        memory.add_decision(symbol, "neutral", trader_decision.confidence, "PASSED", "No strong signal", event=event, trader_synthesis=trader_decision.synthesis, is_counterfactual=True)
+        obs.set_terminal_state("AI THESIS NEUTRAL", f"Trader decided neutral ({trader_decision.confidence:.2f} confidence).")
         obs.log_activity(f"Trader decided neutral for {symbol}")
         return None
         
     if not risk_decision or not risk_decision.approved:
         log.warning(f"Risk Manager vetoed {symbol} ({risk_decision.rationale if risk_decision else 'No response'})")
-        memory.add_decision(symbol, trader_decision.direction, trader_decision.confidence, "VETOED", "Risk manager rejected")
-        obs.set_terminal_state("RISK REJECTED", f"Risk engine vetoed: {risk_decision.rationale if risk_decision else 'No response'}")
+        memory.add_decision(symbol, trader_decision.direction, trader_decision.confidence, "VETOED", "Risk manager rejected", event=event, trader_synthesis=trader_decision.synthesis, is_counterfactual=True)
+        obs.set_terminal_state("RISK LIMIT EXCEEDED", f"Risk engine vetoed: {risk_decision.rationale if risk_decision else 'No response'}")
         obs.log_activity(f"Risk engine vetoed {symbol}")
         obs.increment_stat("risk_rejections")
         return None
@@ -100,14 +102,17 @@ async def process_symbol(symbol: str, open_positions: int, event_context: str = 
     
     if not selected_contract or not snapshot:
         log.info(f"No valid contract found for {symbol}")
-        memory.add_decision(symbol, trader_decision.direction, risk_decision.adjusted_confidence, "NO_CONTRACT", "Filtered out deterministically")
+        memory.add_decision(symbol, trader_decision.direction, risk_decision.adjusted_confidence, "NO_CONTRACT", "Filtered out deterministically", event=event, trader_synthesis=trader_decision.synthesis, is_counterfactual=True)
         obs.set_terminal_state("OPTION REJECTED", "Available option contracts did not meet configured requirements.")
         obs.update_stage("OPTION", "FAILED")
         return None
         
-    if not validate_option_snapshot(snapshot):
-        log.info(f"Snapshot validation failed for {selected_contract}")
-        obs.set_terminal_state("OPTION REJECTED", "Option snapshot validation failed (e.g. wide spread).")
+    is_valid, reject_reason, quant_metrics = validate_tradeability(symbol, selected_contract, snapshot)
+    
+    if not is_valid:
+        log.info(f"Snapshot validation failed for {selected_contract}: {reject_reason}")
+        memory.add_decision(symbol, trader_decision.direction, risk_decision.adjusted_confidence, "VALIDATION_FAILED", f"Quantitative validation failed: {reject_reason}", event=event, trader_synthesis=trader_decision.synthesis, is_counterfactual=True)
+        obs.set_terminal_state(reject_reason, f"Quantitative validation failed: {reject_reason}")
         obs.update_stage("OPTION", "FAILED")
         return None
         
@@ -127,12 +132,15 @@ async def process_symbol(symbol: str, open_positions: int, event_context: str = 
         "contract": selected_contract,
         "direction": trader_decision.direction,
         "confidence": risk_decision.adjusted_confidence,
+        "synthesis": trader_decision.synthesis,
         "rationale": trader_decision.rationale,
         "vol_regime": vol_regime,
         "bid": bid,
         "ask": ask,
         "spread": spread,
-        "delta_dist": delta_dist
+        "delta_dist": delta_dist,
+        "quant_metrics": quant_metrics,
+        "event": event
     }
     
     # Rank candidate
@@ -140,7 +148,7 @@ async def process_symbol(symbol: str, open_positions: int, event_context: str = 
     ranked = rank_opportunities([opp])
     if not ranked:
         obs.update_stage("RANK", "FAILED")
-        obs.set_terminal_state("OPPORTUNITY REJECTED", "Failed ranking evaluation.")
+        obs.set_terminal_state("NO OPPORTUNITIES RANKED", "Failed ranking evaluation.")
         return None
         
     final_opp = ranked[0]
@@ -149,8 +157,8 @@ async def process_symbol(symbol: str, open_positions: int, event_context: str = 
     # Check minimum rank score
     if score < settings.MIN_RANK_SCORE_THRESHOLD:
         log.info(f"Rejected {symbol}: Rank Score {score:.2f} is below threshold {settings.MIN_RANK_SCORE_THRESHOLD}.")
-        memory.add_decision(symbol, trader_decision.direction, risk_decision.adjusted_confidence, "RANK_REJECTED", f"Score {score:.2f} < threshold")
-        obs.set_terminal_state("OPPORTUNITY REJECTED", f"Rank score {score:.2f} is below minimum {settings.MIN_RANK_SCORE_THRESHOLD}.")
+        memory.add_decision(symbol, trader_decision.direction, risk_decision.adjusted_confidence, "RANK_REJECTED", f"Score {score:.2f} < threshold", event=event, trader_synthesis=trader_decision.synthesis, quant_metrics=quant_metrics, rank_score=score, option_candidate=selected_contract, is_counterfactual=True)
+        obs.set_terminal_state("RANK SCORE TOO LOW", f"Rank score {score:.2f} is below minimum {settings.MIN_RANK_SCORE_THRESHOLD}.")
         obs.update_stage("RANK", "FAILED")
         obs.increment_stat("rank_rejections")
         obs.log_activity(f"Opportunity for {symbol} rejected by ranking (Score: {score:.2f})")
@@ -201,7 +209,10 @@ async def execute_opportunity(top_opp: dict, engine: ExecutionEngine = None, cur
             verify_order_state(order.id)
             memory.add_decision(
                 top_opp['symbol'], top_opp['direction'], 
-                top_opp['confidence'], "EXECUTED", top_opp['rationale']
+                top_opp['confidence'], "EXECUTED", top_opp['rationale'],
+                event=top_opp.get('event'), quant_metrics=top_opp.get('quant_metrics'),
+                rank_score=top_opp.get('rank_score'), option_candidate=top_opp.get('contract'),
+                trader_synthesis=top_opp.get('synthesis'), is_counterfactual=False
             )
             obs.update_stage("EXECUTE", "COMPLETED")
             obs.update_stage("MONITOR", "COMPLETED")
@@ -212,7 +223,10 @@ async def execute_opportunity(top_opp: dict, engine: ExecutionEngine = None, cur
         else:
             memory.add_decision(
                 top_opp['symbol'], top_opp['direction'], 
-                top_opp['confidence'], "FAILED_EXECUTION", "Order rejected or failed"
+                top_opp['confidence'], "FAILED_EXECUTION", "Order rejected or failed",
+                event=top_opp.get('event'), quant_metrics=top_opp.get('quant_metrics'),
+                rank_score=top_opp.get('rank_score'), option_candidate=top_opp.get('contract'),
+                trader_synthesis=top_opp.get('synthesis'), is_counterfactual=True
             )
             obs.update_stage("EXECUTE", "FAILED")
             obs.set_terminal_state("FAILED EXECUTION", "Order rejected or failed.")
@@ -222,13 +236,17 @@ async def execute_opportunity(top_opp: dict, engine: ExecutionEngine = None, cur
         log.warning(f"Risk Rejection for {top_opp['contract']}: {e}")
         memory.add_decision(
             top_opp['symbol'], top_opp['direction'], 
-            top_opp['confidence'], "RISK_REJECTED", str(e)
+            top_opp['confidence'], "RISK_REJECTED", str(e),
+            event=top_opp.get('event'), quant_metrics=top_opp.get('quant_metrics'),
+            rank_score=top_opp.get('rank_score'), option_candidate=top_opp.get('contract'),
+            trader_synthesis=top_opp.get('synthesis'), is_counterfactual=True
         )
         obs.update_stage("EXECUTE", "FAILED")
-        obs.set_terminal_state("RISK REJECTED", f"Risk engine vetoed at execution: {e}")
+        obs.set_terminal_state("RISK LIMIT EXCEEDED", f"Risk engine vetoed at execution: {e}")
         obs.increment_stat("risk_rejections")
 
-async def trigger_pipeline(symbol: str, event_context: str):
+async def trigger_pipeline(event: Event):
+    symbol = event.symbol
     if symbol in in_progress_evals:
         log.info(f"Ignored event for {symbol} - pipeline already in progress.")
         return
@@ -257,9 +275,9 @@ async def trigger_pipeline(symbol: str, event_context: str):
             
         evals_this_hour[symbol].append(now)
         
-        obs.start_evaluation(symbol, event_context)
+        obs.start_evaluation(symbol, event.market_context)
         
-        opp = await process_symbol(symbol, len(open_positions), event_context)
+        opp = await process_symbol(event, len(open_positions))
         if opp:
             await execute_opportunity(opp)
     except Exception as e:
@@ -294,8 +312,16 @@ async def handle_bar(bar):
         last_eval_time[symbol] = now
         
         event_context = f"Sudden price movement to {price} detected."
+        event = Event(
+            timestamp=now,
+            symbol=symbol,
+            event_type="PRICE_SPIKE",
+            magnitude=change,
+            source="StockDataStream",
+            market_context=event_context
+        )
         log.info(f"Triggering pipeline for {symbol} due to price event.")
-        asyncio.run_coroutine_threadsafe(trigger_pipeline(symbol, event_context), main_loop)
+        asyncio.run_coroutine_threadsafe(trigger_pipeline(event), main_loop)
     except Exception as e:
         log.error(f"Error in handle_bar: {e}")
 
@@ -312,8 +338,16 @@ async def handle_news(news):
             
         last_eval_time[symbol] = now
         event_context = f"Breaking news headline: {news.headline}"
+        event = Event(
+            timestamp=now,
+            symbol=symbol,
+            event_type="BREAKING_NEWS",
+            magnitude=0.0,
+            source="NewsDataStream",
+            market_context=event_context
+        )
         log.info(f"Triggering pipeline for {symbol} due to news event.")
-        asyncio.run_coroutine_threadsafe(trigger_pipeline(symbol, event_context), main_loop)
+        asyncio.run_coroutine_threadsafe(trigger_pipeline(event), main_loop)
     except Exception as e:
         log.error(f"Error in handle_news: {e}")
 
