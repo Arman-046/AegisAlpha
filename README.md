@@ -161,6 +161,13 @@ AegisAlpha is strictly a **Demo Mode / Simulation Only** paper-trading applicati
    streamlit run dashboard.py
    ```
 
+### Trading Modes
+
+AegisAlpha supports two explicit modes configured via `TRADING_MODE` in `.env`:
+
+* **`paper`**: Real-time integration with Alpaca Paper Trading. The agent listens to live market data streams and executes real paper trades.
+* **`demo`**: A deterministic educational simulation. This mode uses static, controlled fixture data to demonstrate the system's reasoning pipeline and Risk Governor without requiring live market conditions or Alpaca market-data credentials. It will never send a real order and can be run 24/7, even when markets are closed.
+
 ---
 
 ## 🌐 Cloud Deployment

@@ -23,18 +23,18 @@ st.markdown("""
         color: #f8fafc;
         font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     }
-    
+
     /* Hide some default Streamlit elements */
     header {visibility: hidden;}
     footer {visibility: hidden;}
-    
+
     /* Headers */
     h1, h2, h3, h4, h5, h6 {
         color: #f8fafc;
         font-weight: 600;
         letter-spacing: -0.02em;
     }
-    
+
     /* Cards */
     .premium-card {
         background: linear-gradient(145deg, #0f172a, #0b0f19);
@@ -50,7 +50,7 @@ st.markdown("""
         box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
         border-color: #334155;
     }
-    
+
     .status-badge {
         display: inline-block;
         padding: 6px 14px;
@@ -61,7 +61,7 @@ st.markdown("""
         text-transform: uppercase;
         margin-bottom: 12px;
     }
-    
+
     /* Pipeline Nodes */
     .pipeline-container {
         display: flex;
@@ -92,15 +92,15 @@ st.markdown("""
     .node-processing { background-color: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 2px solid #3b82f6; animation: pulse 1.5s infinite; }
     .node-completed { background-color: rgba(16, 185, 129, 0.2); color: #34d399; border: 2px solid #10b981; }
     .node-failed { background-color: rgba(239, 68, 68, 0.2); color: #f87171; border: 2px solid #ef4444; }
-    
+
     .node-label { font-size: 0.70rem; color: #cbd5e1; font-weight: 600; text-transform: uppercase; }
-    
+
     @keyframes pulse {
         0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
         70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
         100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
     }
-    
+
     /* Watchlist tags */
     .tag {
         background-color: #1e293b;
@@ -114,15 +114,15 @@ st.markdown("""
         display: inline-block;
     }
     .tag-active { border-color: #10b981; color: #10b981; }
-    
+
     /* Active Monitoring Animations */
-    .node-listening { 
-        background-color: rgba(56, 189, 248, 0.1); 
-        color: #38bdf8; 
-        border: 2px solid rgba(56, 189, 248, 0.3); 
-        animation: listenPulse 2s ease-in-out infinite; 
+    .node-listening {
+        background-color: rgba(56, 189, 248, 0.1);
+        color: #38bdf8;
+        border: 2px solid rgba(56, 189, 248, 0.3);
+        animation: listenPulse 2s ease-in-out infinite;
     }
-    
+
     @keyframes listenPulse {
         0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.4); border-color: rgba(56, 189, 248, 0.8); }
         50% { box-shadow: 0 0 0 8px rgba(56, 189, 248, 0); border-color: rgba(56, 189, 248, 0.2); }
@@ -145,7 +145,7 @@ st.markdown("""
         0%, 100% { opacity: 1; }
         50% { opacity: 0; }
     }
-    
+
     /* Mobile responsive pipeline */
     @media (max-width: 768px) {
         .pipeline-container { flex-direction: column; align-items: flex-start; }
@@ -212,15 +212,15 @@ col1, col2 = st.columns([2, 1])
 
 with col1:
     st.markdown("### SYSTEM STATUS")
-    
+
     is_live = "LIVE PAPER" if settings.PAPER else "LIVE"
     is_demo = settings.TRADING_MODE == "demo"
     env_badge = "🔵 DEMO MODE — SIMULATION ONLY (NO REAL ORDERS)" if is_demo else f"🟢 {is_live} — REAL ALPACA PAPER ACCOUNT"
-    
+
     agent_status = obs.get("status", "STOPPED") if obs else "STOPPED"
     hb_time = obs.get("last_heartbeat", 0) if obs else 0
     is_stale = (time.time() - hb_time) > 120 if hb_time else True
-    
+
     if is_stale and agent_status != "STOPPED":
         agent_status = "STALE / UNRESPONSIVE"
         agent_color = "#f59e0b"
@@ -230,14 +230,14 @@ with col1:
         agent_color = "#3b82f6"
     else:
         agent_color = "#ef4444"
-        
+
     ai_status = obs.get("ai_provider_status", "AVAILABLE") if obs else "AVAILABLE"
     ai_color = "#10b981" if ai_status == "AVAILABLE" else "#ef4444"
-    
+
     html_content = f"""
     <div class="premium-card">
         <div style="font-weight: 800; margin-bottom: 24px; color: {'#3b82f6' if is_demo else '#10b981'}; font-size: 1.1rem;">{env_badge}</div>
-        
+
         <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; font-size: 1.1rem;">
             <div style="display: flex; justify-content: space-between;">
                 <span style="color: #94a3b8;">● Agent</span>
@@ -256,7 +256,7 @@ with col1:
                 <span style="color: {'#10b981' if not is_demo else '#3b82f6'}; font-weight: bold;">{'CONNECTED' if not is_demo else 'MOCKED'}</span>
             </div>
         </div>
-        
+
         <div style="border-top: 1px solid #1e293b; padding-top: 16px; margin-bottom: 8px; color: #f8fafc; font-weight: 600; font-size: 1.1rem;">
             Activity: <span style="color: #38bdf8;">
             {'Monitoring Market Data Streams <span class="blinking-cursor">█</span>' if obs and obs.get('last_terminal_state', {}).get('status') == 'WAITING FOR EVENT' else obs.get('last_terminal_state', {}).get('status', 'Monitoring Market Data Streams <span class="blinking-cursor">█</span>') if obs else 'Monitoring Market Data Streams <span class="blinking-cursor">█</span>'}
@@ -278,17 +278,17 @@ with col2:
             The agent continuously monitors configured market data streams. The AI reasoning pipeline is invoked <strong>only</strong> when the event detector identifies a qualifying volatility event or breaking news.
         </div>
     """
-    
+
     tags_html = ""
     for s in settings.WATCHLIST:
         tags_html += f"<span class='tag tag-active'>{s} <span class='blinking-dot'>●</span></span>"
     st.markdown((html_content + tags_html + "</div>").replace('\n', ''), unsafe_allow_html=True)
-    
+
     if is_demo:
         st.markdown("### DEMONSTRATION CONTROLS")
         st.markdown("<div style='font-size: 0.9rem; color: #94a3b8; margin-bottom: 12px;'>Trigger controlled simulation scenarios. The AI will evaluate real/mocked data and run through the deterministic pipeline.</div>", unsafe_allow_html=True)
-        col_btn1, col_btn2 = st.columns(2)
-        
+        col_btn1, col_btn2, col_btn3 = st.columns(3)
+
         def write_demo_trigger(scenario):
             import uuid
             trigger_file = "state/demo_trigger.json"
@@ -304,13 +304,16 @@ with col2:
                 json.dump(data, f)
             os.replace(temp_file, trigger_file)
             st.toast(f"Demo trigger sent: {scenario}", icon="🚀")
-            
+
         with col_btn1:
-            if st.button("▶️ SCENARIO A: APPROVED TRADE", use_container_width=True):
+            if st.button("▶️ SCENARIO A: APPROVED", use_container_width=True):
                 write_demo_trigger("approved_trade")
         with col_btn2:
-            if st.button("▶️ SCENARIO B: RISK REJECTION", use_container_width=True):
+            if st.button("⏹️ SCENARIO B: RISK VETO", use_container_width=True):
                 write_demo_trigger("risk_rejection")
+        with col_btn3:
+            if st.button("⚠️ SCENARIO C: DATA FAIL", use_container_width=True):
+                write_demo_trigger("data_rejection")
 
 # 2. INTELLIGENT WATCHLIST
 wl_state = obs.get("watchlist", {}) if obs else {}
@@ -331,14 +334,14 @@ funnel_html = f"""
 <div class="premium-card" style="margin-bottom: 24px;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid #1e293b; padding-bottom: 12px;">
         <div style="font-size: 0.9rem; color: #94a3b8;">
-            Updated: <span style="color:#f8fafc;">{format_time(wl_last) if wl_last > 0 else 'Never'}</span> | 
+            Updated: <span style="color:#f8fafc;">{format_time(wl_last) if wl_last > 0 else 'Never'}</span> |
             Next refresh: <span style="color:#38bdf8;">{format_time(wl_next) if wl_next > 0 else 'Market Closed'}</span>
         </div>
         <div style="font-size: 0.85rem; padding: 4px 8px; border-radius: 4px; background: {'rgba(16, 185, 129, 0.1)' if wl_status == 'ACTIVE' else 'rgba(56, 189, 248, 0.1)'}; color: {'#10b981' if wl_status == 'ACTIVE' else '#38bdf8'};">
             STATUS: {wl_status}
         </div>
     </div>
-    
+
     <div style="display: flex; justify-content: space-between; text-align: center; margin-bottom: 24px;">
         <div style="flex: 1;">
             <div style="font-size: 1.5rem; font-weight: 800; color: #f1f5f9;">{scanned}</div>
@@ -368,11 +371,11 @@ if wl_picks:
         sym = pick.get('symbol', 'UNK')
         score = pick.get('score', 0)
         reason = pick.get('reason', '')
-        
+
         # Color coding score
         s_color = "#10b981" if score >= 85 else "#f59e0b" if score >= 70 else "#94a3b8"
         s_label = "HIGH INTEREST" if score >= 85 else "WATCH"
-        
+
         funnel_html += f"""
         <div style="display: flex; align-items: center; background: rgba(15, 23, 42, 0.4); padding: 12px; border-radius: 6px; border-left: 3px solid {s_color};">
             <div style="width: 30px; color: #64748b; font-size: 0.8rem;">{i+1:02d}</div>
@@ -450,12 +453,12 @@ with col4:
     term_state = obs.get("last_terminal_state", {}) if obs else {}
     t_status = term_state.get("status", "WAITING FOR EVENT")
     t_reason = term_state.get("reason", "No qualifying market event has triggered the strategy.")
-    
+
     t_color = "#94a3b8"
     if t_status == "TRADE APPROVED": t_color = "#10b981"
     elif "REJECTED" in t_status or "FAILED" in t_status or "UNAVAILABLE" in t_status: t_color = "#ef4444"
     elif t_status == "PROCESSING": t_color = "#3b82f6"
-    
+
     st.markdown(f"""
     <div class="premium-card" style="height: 180px;">
         <h3 style="color: {t_color}; margin-top: 0; font-size: 1.6rem;">{t_status}</h3>
@@ -538,10 +541,10 @@ with col8:
             last_eq = float(account.last_equity)
             today_pnl = eq - last_eq
             today_pnl_pct = (today_pnl / last_eq) * 100 if last_eq > 0 else 0
-            
+
             pnl_color = "#10b981" if today_pnl >= 0 else "#ef4444"
             pnl_sign = "+" if today_pnl >= 0 else ""
-            
+
             st.markdown(f"""
             <div class="premium-card">
                 <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px;">
@@ -601,14 +604,14 @@ if not history:
 else:
     live_actions = ["EXECUTED", "FAILED_EXECUTION"]
     cf_actions = ["PASSED", "VETOED", "NO_CONTRACT", "VALIDATION_FAILED", "RANK_REJECTED", "RISK_REJECTED"]
-    
+
     executed = [h for h in history if h.get("action") in live_actions and h.get("mode") == "LIVE_PAPER"]
     demo_executed = [h for h in history if h.get("mode") == "DEMO"]
     counterfactuals = [h for h in history if h.get("action") in cf_actions and h.get("mode") != "DEMO"]
     failures = [h for h in history if h.get("action") not in live_actions and h.get("action") not in cf_actions and h.get("mode") != "DEMO"]
-    
+
     tab1, tab2, tab3, tab4 = st.tabs(["🔴 LIVE PAPER EXECUTIONS", "🔵 DEMO SIMULATIONS", "🟡 COUNTERFACTUALS (WHAT-IF)", "⚙️ SYSTEM FAILURES"])
-    
+
     with tab1:
         if not executed:
             st.markdown("<div style='padding: 20px; color: #94a3b8; text-align: center;'>No live trades executed yet.</div>", unsafe_allow_html=True)
@@ -630,7 +633,7 @@ else:
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-                
+
     with tab2:
         st.markdown("<div style='background-color: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; padding: 12px; border-radius: 6px; margin-bottom: 20px; font-size: 0.9rem;'><strong>NOTE:</strong> These are strictly simulated demo trades running through the AegisAlpha engine for demonstration purposes. They are mathematically excluded from Live Paper statistics.</div>", unsafe_allow_html=True)
         if not demo_executed:
@@ -641,15 +644,35 @@ else:
                 sym = item.get("symbol", "")
                 dir_color = "#38bdf8"
                 action_color = "#10b981" if "EXECUTED" in item.get("action") else "#ef4444"
-                
+
                 st.markdown(f"""
                 <div class='premium-card' style='border-left: 4px solid {dir_color};'>
                     <div style='display: flex; justify-content: space-between;'>
                         <strong style='font-size: 1.2rem; color: #f8fafc;'>{sym} - DEMO {item.get('action')}</strong>
                         <span style='color: #64748b;'>{ts}</span>
                     </div>
-                    <div style='color: {action_color}; font-size: 0.9rem; margin-top: 8px;'><strong>Outcome:</strong> {item.get('reason')}</div>
-                    <div style='color: #38bdf8; font-size: 0.85rem; margin-top: 4px;'>Event: {item.get('event', 'Unknown')}</div>
+
+                    <div style='margin-top: 16px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; background: rgba(15, 23, 42, 0.5); padding: 16px; border-radius: 8px;'>
+                        <div>
+                            <div style='font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;'>AI CONFIDENCE</div>
+                            <div style='font-size: 1.2rem; color: #f8fafc; font-weight: 700;'>{item.get('confidence', 0):.0f}%</div>
+                        </div>
+                        <div>
+                            <div style='font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;'>ENGINEERING SCORE</div>
+                            <div style='font-size: 1.2rem; color: #f8fafc; font-weight: 700;'>{item.get('rank_score', 0):.1f} / 100</div>
+                        </div>
+                        <div style='grid-column: span 2;'>
+                            <div style='font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;'>RISK GOVERNOR</div>
+                            <div style='font-size: 1.1rem; color: #f8fafc; font-weight: 700;'>{'APPROVED' if 'EXECUTED' in item.get('action') else 'LIMIT EXCEEDED / VETOED'}</div>
+                        </div>
+                    </div>
+
+                    <div style='margin-top: 16px;'>
+                        <div style='font-size: 0.8rem; color: #94a3b8; text-transform: uppercase;'>RESULT</div>
+                        <div style='color: {action_color}; font-size: 1.1rem; font-weight: 800;'>{item.get('reason')}</div>
+                    </div>
+
+                    <div style='color: #38bdf8; font-size: 0.85rem; margin-top: 12px;'>Event: {item.get('event', 'Unknown')}</div>
                     <div style='color: #cbd5e1; margin-top: 8px; font-size: 0.95rem;'><strong>Synthesis:</strong> {item.get('trader_synthesis', 'N/A')}</div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -664,10 +687,10 @@ else:
                 sym = item.get("symbol", "")
                 action = item.get("action", "")
                 reason = item.get("reason", "")
-                
+
                 action_color = "#ef4444"
                 if "NEUTRAL" in action or "PASSED" in action: action_color = "#94a3b8"
-                
+
                 st.markdown(f"""
                 <div class='premium-card' style='border-left: 2px dashed {action_color}; opacity: 0.85;'>
                     <div style='display: flex; justify-content: space-between;'>
@@ -679,7 +702,7 @@ else:
                     <div style='color: #94a3b8; margin-top: 8px; font-size: 0.9rem;'><em>Synthesis: {item.get('trader_synthesis', 'No synthesis')}</em></div>
                 </div>
                 """, unsafe_allow_html=True)
-                
+
     with tab4:
         st.markdown("<div style='background-color: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; padding: 12px; border-radius: 6px; margin-bottom: 20px; font-size: 0.9rem;'><strong>NOTE:</strong> System Failures (e.g. AI API timeouts, stale data, malformed schema) are aborted evaluations. They are neither live trades nor counterfactual considerations.</div>", unsafe_allow_html=True)
         if not failures:

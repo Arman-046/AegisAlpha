@@ -548,19 +548,24 @@ async def check_demo_trigger():
                         scenario = data.get("scenario")
                         log.info(f"Processing DEMO trigger: {scenario} (ID: {req_id})")
                         
-                        if scenario in ["approved_trade", "risk_rejection"]:
+                        if scenario in ["approved_trade", "risk_rejection", "data_rejection"]:
                             # Mock portfolio cash injection for Risk Governor testing
                             from state.demo_portfolio import demo_portfolio
                             if scenario == "approved_trade":
-                                demo_portfolio.cash = 100000.0
-                                sym = "MSFT"
-                                magnitude = 0.02
+                                demo_portfolio.cash = 1000.0
+                                sym = "AAPL"
+                                magnitude = 0.05
                                 ctx = "Simulated positive earnings surprise."
                             elif scenario == "risk_rejection":
-                                demo_portfolio.cash = 1000.0  # Too low, will fail 2% limit
-                                sym = "AAPL"
+                                demo_portfolio.cash = 1000.0  # Too low for the $250 max loss fixture
+                                sym = "TSLA"
                                 magnitude = -0.05
                                 ctx = "Simulated negative guidance."
+                            elif scenario == "data_rejection":
+                                demo_portfolio.cash = 1000.0
+                                sym = "NVDA"
+                                magnitude = 0.05
+                                ctx = "Simulated AI event."
                                 
                             event = Event(
                                 timestamp=time.time(),

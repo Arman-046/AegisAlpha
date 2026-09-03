@@ -3,7 +3,7 @@ from typing import Optional, List, Dict, Any
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 
 from alpaca.data.requests import (
-    StockBarsRequest, 
+    StockBarsRequest,
     OptionChainRequest,
     OptionSnapshotRequest,
     NewsRequest
@@ -16,6 +16,7 @@ from alpaca.trading.enums import ContractType
 
 from data.clients import stock_data_client, option_data_client, news_client, trading_client
 from app_logging.logger import get_logger
+from config.settings import settings
 
 log = get_logger(__name__)
 
@@ -33,10 +34,14 @@ def fetch_stock_bars(symbol: str, days: int = 180) -> Optional[Any]:
     Fetches daily stock bars for the last 'days' days.
     Used for volatility calculations.
     """
+    if settings.TRADING_MODE == "demo":
+        from data.fixtures import get_mock_stock_bars
+        return get_mock_stock_bars(symbol)
+
     try:
         end = datetime.datetime.now(datetime.timezone.utc)
         start = end - datetime.timedelta(days=days)
-        
+
         request = StockBarsRequest(
             symbol_or_symbols=symbol,
             timeframe=TimeFrame.Day,
@@ -61,6 +66,10 @@ def fetch_news(symbol: str, limit: int = 5) -> List[Any]:
     """
     Fetches the latest news articles for a symbol.
     """
+    if settings.TRADING_MODE == "demo":
+        from data.fixtures import get_mock_news
+        return get_mock_news(symbol)
+
     try:
         request = NewsRequest(
             symbols=symbol,
@@ -86,6 +95,10 @@ def fetch_option_contracts(symbol: str) -> List[Any]:
     """
     Fetches available option contracts for a symbol to find active expirations.
     """
+    if settings.TRADING_MODE == "demo":
+        from data.fixtures import get_mock_option_contracts
+        return get_mock_option_contracts(symbol)
+
     try:
         req = GetOptionContractsRequest(underlying_symbols=[symbol], status="active")
         res = trading_client.get_option_contracts(req)
@@ -129,7 +142,11 @@ def fetch_targeted_option_snapshots(symbols: List[str]) -> Dict[str, Any]:
     """
     if not symbols:
         return {}
-        
+
+    if settings.TRADING_MODE == "demo":
+        from data.fixtures import get_mock_option_snapshots
+        return get_mock_option_snapshots(symbols)
+
     try:
         req = OptionSnapshotRequest(symbol_or_symbols=symbols)
         res = option_data_client.get_option_snapshots(req)
@@ -151,28 +168,28 @@ def validate_option_snapshot(snapshot: Any) -> bool:
     """
     if not snapshot:
         return False
-    
+
     # Check for latest quote presence
     if not hasattr(snapshot, 'latest_quote') or snapshot.latest_quote is None:
         return False
-        
+
     quote = snapshot.latest_quote
     # Check for valid bid/ask
     if not hasattr(quote, 'bid_price') or not hasattr(quote, 'ask_price'):
         return False
-        
+
     if quote.bid_price is None or quote.ask_price is None:
         return False
-        
+
     # Reject 0 bid (illiquid) unless we are explicitly holding it and it's a known artifact
     # For new entries, we strictly want liquidity
     if quote.bid_price <= 0.0:
         return False
-        
+
     if quote.ask_price <= quote.bid_price:
         return False
-        
+
     # Check implied volatility / greeks presence if required
     # Alpaca sometimes returns None for implied_volatility
-    
+
     return True
