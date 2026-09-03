@@ -200,10 +200,10 @@ logo_html = f'<img src="data:image/png;base64,{logo_base64}" width="180" style="
 
 st.markdown(f"""
 <div style="text-align: center; margin-bottom: 3rem; margin-top: 1rem;">
-    {logo_html}
-    <h1 style="margin-bottom: 0; color: #10b981; font-weight: 800; letter-spacing: 3px; text-shadow: 0 0 20px rgba(16, 185, 129, 0.3); font-size: 3rem;">AEGISALPHA</h1>
-    <p style="color: #94a3b8; font-size: 1.1rem; margin-top: 0.5rem; text-transform: uppercase; letter-spacing: 2px; font-weight: 600;">Autonomous Event-Driven AI Trading</p>
-    <div style="width: 100px; height: 3px; background: linear-gradient(90deg, transparent, #10b981, transparent); margin: 1.5rem auto 0 auto;"></div>
+{logo_html}
+<h1 style="margin-bottom: 0; color: #10b981; font-weight: 800; letter-spacing: 3px; text-shadow: 0 0 20px rgba(16, 185, 129, 0.3); font-size: 3rem;">AEGISALPHA</h1>
+<p style="color: #94a3b8; font-size: 1.1rem; margin-top: 0.5rem; text-transform: uppercase; letter-spacing: 2px; font-weight: 600;">Autonomous Event-Driven AI Trading</p>
+<div style="width: 100px; height: 3px; background: linear-gradient(90deg, transparent, #10b981, transparent); margin: 1.5rem auto 0 auto;"></div>
 </div>
 """, unsafe_allow_html=True)
 
