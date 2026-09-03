@@ -303,7 +303,10 @@ async def evaluate_symbol_pipeline(symbol: str, bars_summary: str, news_summary:
     trader_prompt = build_trader_prompt(symbol, bull_arg, bear_arg, recent_context, threshold)
     try:
         trader_decision = await asyncio.wait_for(_run_trader(symbol, trader_prompt), timeout=45.0)
-        obs.update_stage("TRADER", "COMPLETED")
+        if trader_decision:
+            obs.update_stage("TRADER", "COMPLETED")
+        else:
+            obs.update_stage("TRADER", "FAILED")
     except Exception as e:
         log.warning(f"Trader failed for {symbol}: {e}")
         obs.update_stage("TRADER", "FAILED")
@@ -317,7 +320,10 @@ async def evaluate_symbol_pipeline(symbol: str, bars_summary: str, news_summary:
     risk_prompt = build_risk_prompt(symbol, trader_decision.direction, trader_decision.confidence, vol_regime, open_positions)
     try:
         risk_decision = await asyncio.wait_for(_run_risk_manager(symbol, risk_prompt), timeout=45.0)
-        obs.update_stage("RISK", "COMPLETED")
+        if risk_decision:
+            obs.update_stage("RISK", "COMPLETED")
+        else:
+            obs.update_stage("RISK", "FAILED")
     except Exception as e:
         log.warning(f"Risk manager failed for {symbol}: {e}")
         obs.update_stage("RISK", "FAILED")
