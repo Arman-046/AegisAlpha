@@ -88,15 +88,18 @@ async def evaluate_screener_candidates(candidates_data: str) -> list[dict] | Non
     client = get_async_client()
     if not client: return None
     try:
-        res = await client.aio.models.generate_content(
-            model=settings.GEMINI_MODEL,
-            contents=f"Please analyze these top quantitative candidates and select the 5 best:\n{candidates_data}",
-            config=types.GenerateContentConfig(
-                system_instruction=PORTFOLIO_MANAGER_SYSTEM_PROMPT,
-                response_mime_type="application/json",
-                response_schema=ScreenerResponse,
-                temperature=0.2
-            )
+        res = await asyncio.wait_for(
+            client.aio.models.generate_content(
+                model=settings.GEMINI_MODEL,
+                contents=f"Please analyze these top quantitative candidates and select the 5 best:\n{candidates_data}",
+                config=types.GenerateContentConfig(
+                    system_instruction=PORTFOLIO_MANAGER_SYSTEM_PROMPT,
+                    response_mime_type="application/json",
+                    response_schema=ScreenerResponse,
+                    temperature=0.2
+                )
+            ),
+            timeout=60.0
         )
         if not res.text: return None
         
@@ -273,7 +276,9 @@ async def evaluate_symbol_pipeline(symbol: str, bars_summary: str, news_summary:
     bear_task = asyncio.create_task(_run_analyst(symbol, analyst_prompt, BEAR_SYSTEM_PROMPT, BearDecision))
     
     try:
-        bull_decision, bear_decision = await asyncio.gather(bull_task, bear_task)
+        bull_decision, bear_decision = await asyncio.wait_for(
+            asyncio.gather(bull_task, bear_task), timeout=45.0
+        )
         log.info(f"[{symbol}] Concurrent evaluation complete. Bull Conf: {bull_decision.confidence if bull_decision else None}, Bear Conf: {bear_decision.confidence if bear_decision else None}")
     except Exception as e:
         log.warning(f"Failed to get analyst decisions for {symbol} due to error: {e}")
@@ -297,7 +302,7 @@ async def evaluate_symbol_pipeline(symbol: str, bars_summary: str, news_summary:
     obs.update_stage("TRADER", "PROCESSING")
     trader_prompt = build_trader_prompt(symbol, bull_arg, bear_arg, recent_context, threshold)
     try:
-        trader_decision = await _run_trader(symbol, trader_prompt)
+        trader_decision = await asyncio.wait_for(_run_trader(symbol, trader_prompt), timeout=45.0)
         obs.update_stage("TRADER", "COMPLETED")
     except Exception as e:
         log.warning(f"Trader failed for {symbol}: {e}")
@@ -311,7 +316,7 @@ async def evaluate_symbol_pipeline(symbol: str, bars_summary: str, news_summary:
     obs.update_stage("RISK", "PROCESSING")
     risk_prompt = build_risk_prompt(symbol, trader_decision.direction, trader_decision.confidence, vol_regime, open_positions)
     try:
-        risk_decision = await _run_risk_manager(symbol, risk_prompt)
+        risk_decision = await asyncio.wait_for(_run_risk_manager(symbol, risk_prompt), timeout=45.0)
         obs.update_stage("RISK", "COMPLETED")
     except Exception as e:
         log.warning(f"Risk manager failed for {symbol}: {e}")
