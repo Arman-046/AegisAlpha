@@ -7,8 +7,7 @@ from app_logging.logger import get_logger
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception
 import traceback
 
-from google import genai
-from google.genai import types
+from groq import AsyncGroq
 
 from mcp_tools.alpaca_mcp import ALPACA_MCP_TOOLS, mcp_client
 
@@ -71,10 +70,10 @@ def get_async_client():
     global _async_client
     if _async_client is None:
         try:
-            if settings.GEMINI_API_KEY:
-                _async_client = genai.Client(api_key=settings.GEMINI_API_KEY)
+            if settings.GROQ_API_KEY and settings.GROQ_API_KEY != "PK_DUMMY":
+                _async_client = AsyncGroq(api_key=settings.GROQ_API_KEY)
         except Exception as e:
-            log.error(f"Failed to initialize Gemini Client: {e}")
+            log.error(f"Failed to initialize Groq Client: {e}")
     return _async_client
 
 def is_transient_error(e: Exception) -> bool:
@@ -88,22 +87,25 @@ async def evaluate_screener_candidates(candidates_data: str) -> list[dict] | Non
     client = get_async_client()
     if not client: return None
     try:
-        res = await asyncio.wait_for(
-            client.aio.models.generate_content(
-                model=settings.GEMINI_MODEL,
-                contents=f"Please analyze these top quantitative candidates and select the 5 best:\n{candidates_data}",
-                config=types.GenerateContentConfig(
-                    system_instruction=PORTFOLIO_MANAGER_SYSTEM_PROMPT,
-                    response_mime_type="application/json",
-                    response_schema=ScreenerResponse,
-                    temperature=0.2
-                )
+        schema_json = ScreenerResponse.model_json_schema()
+        system_msg = f"{PORTFOLIO_MANAGER_SYSTEM_PROMPT}\n\nYou must return a valid JSON object adhering to the following JSON schema:\n{json.dumps(schema_json)}"
+        
+        completion = await asyncio.wait_for(
+            client.chat.completions.create(
+                model=settings.GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": f"Please analyze these top quantitative candidates and select the 5 best:\n{candidates_data}"}
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.2
             ),
             timeout=60.0
         )
-        if not res.text: return None
+        res_text = completion.choices[0].message.content
+        if not res_text: return None
         
-        data = json.loads(res.text)
+        data = json.loads(res_text)
         validated = ScreenerResponse(**data)
         
         return [c.model_dump() for c in validated.watchlist]
@@ -113,51 +115,41 @@ async def evaluate_screener_candidates(candidates_data: str) -> list[dict] | Non
         return None
 
 
-def get_gemini_tools() -> list:
-    """Translates ALPACA_MCP_TOOLS to Gemini FunctionDeclarations"""
-    gemini_funcs = []
+def get_groq_tools() -> list:
+    """Translates ALPACA_MCP_TOOLS to OpenAI FunctionDeclarations"""
+    tools = []
     for t in ALPACA_MCP_TOOLS:
-        props = t.get("input_schema", {}).get("properties", {})
-        required = t.get("input_schema", {}).get("required", [])
-        
-        gemini_props = {}
-        for k, v in props.items():
-            type_str = v.get("type", "string").upper()
-            gemini_props[k] = types.Schema(
-                type=getattr(types.Type, type_str, types.Type.STRING),
-                description=v.get("description", "")
-            )
-            
-        func_decl = types.FunctionDeclaration(
-            name=t["name"],
-            description=t["description"],
-            parameters=types.Schema(
-                type=types.Type.OBJECT,
-                properties=gemini_props,
-                required=required
-            ) if gemini_props else None
-        )
-        gemini_funcs.append(func_decl)
-    return [types.Tool(function_declarations=gemini_funcs)]
+        tools.append({
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": t.get("input_schema", {"type": "object", "properties": {}})
+            }
+        })
+    return tools
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception(is_transient_error), reraise=False, retry_error_callback=lambda rs: None)
 async def _run_analyst(symbol: str, prompt: str, system_prompt: str, schema_class) -> Any:
     client = get_async_client()
     if not client: return None
     try:
-        res = await client.aio.models.generate_content(
-            model=settings.GEMINI_MODEL,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                response_mime_type="application/json",
-                response_schema=schema_class,
-                temperature=0.0
-            )
+        schema_json = schema_class.model_json_schema()
+        system_msg = f"{system_prompt}\n\nYou must return a valid JSON object adhering to the following JSON schema:\n{json.dumps(schema_json)}"
+        
+        completion = await client.chat.completions.create(
+            model=settings.GROQ_MODEL,
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.0
         )
-        if not res.text:
-            raise ValueError("Empty response from Gemini")
-        data = json.loads(res.text)
+        res_text = completion.choices[0].message.content
+        if not res_text:
+            raise ValueError("Empty response from Groq")
+        data = json.loads(res_text)
         return schema_class(**data)
     except Exception as e:
         log.warning(f"Analyst error for {symbol}: {e}")
@@ -168,68 +160,66 @@ async def _run_trader(symbol: str, prompt: str) -> TraderDecision | None:
     client = get_async_client()
     if not client: return None
     try:
-        messages = [{"role": "user", "parts": [types.Part.from_text(text=prompt)]}]
+        messages = [
+            {"role": "system", "content": TRADER_SYSTEM_PROMPT},
+            {"role": "user", "content": prompt}
+        ]
         
-        config = types.GenerateContentConfig(
-            system_instruction=TRADER_SYSTEM_PROMPT,
-            tools=get_gemini_tools(),
+        completion = await client.chat.completions.create(
+            model=settings.GROQ_MODEL,
+            messages=messages,
+            tools=get_groq_tools(),
+            tool_choice="auto",
             temperature=0.0
         )
         
-        res = await client.aio.models.generate_content(
-            model=settings.GEMINI_MODEL,
-            contents=messages,
-            config=config
-        )
+        response_message = completion.choices[0].message
         
-        # Check if tool use was requested
-        while res.function_calls:
-            messages.append({"role": "model", "parts": res.candidates[0].content.parts})
+        while response_message.tool_calls:
+            messages.append(response_message.model_dump(exclude_unset=True))
             
-            tool_responses = []
-            for fn_call in res.function_calls:
-                tool_name = fn_call.name
-                tool_args = fn_call.args if fn_call.args else {}
+            for tool_call in response_message.tool_calls:
+                tool_name = tool_call.function.name
+                tool_args = json.loads(tool_call.function.arguments) if tool_call.function.arguments else {}
                 
                 log.info(f"Trader requested tool: {tool_name} with {tool_args}")
                 tool_result = await mcp_client.execute_tool(tool_name, tool_args)
                 
-                tool_responses.append(
-                    types.Part.from_function_response(
-                        name=tool_name,
-                        response={"result": tool_result}
-                    )
-                )
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "name": tool_name,
+                    "content": json.dumps({"result": tool_result})
+                })
                 
-            messages.append({"role": "user", "parts": tool_responses})
-            
-            res = await client.aio.models.generate_content(
-                model=settings.GEMINI_MODEL,
-                contents=messages,
-                config=config
+            completion = await client.chat.completions.create(
+                model=settings.GROQ_MODEL,
+                messages=messages,
+                tools=get_groq_tools(),
+                tool_choice="auto",
+                temperature=0.0
             )
-            
+            response_message = completion.choices[0].message
+
         # Final pass to ensure we get structured output matching TraderDecision
-        # Sometimes tools config doesn't perfectly mix with response_schema in one go,
-        # so we extract the JSON or enforce it now if it didn't use a tool.
-        # However, to be safe, we can just ask Gemini to parse its final answer into the schema.
-        final_config = types.GenerateContentConfig(
-            system_instruction=TRADER_SYSTEM_PROMPT,
-            response_mime_type="application/json",
-            response_schema=TraderDecision,
+        schema_json = TraderDecision.model_json_schema()
+        messages.append({
+            "role": "user",
+            "content": f"Please provide your final decision in JSON matching this schema:\n{json.dumps(schema_json)}"
+        })
+        
+        final_completion = await client.chat.completions.create(
+            model=settings.GROQ_MODEL,
+            messages=messages,
+            response_format={"type": "json_object"},
             temperature=0.0
         )
-        
-        final_res = await client.aio.models.generate_content(
-            model=settings.GEMINI_MODEL,
-            contents=messages + [{"role": "user", "parts": [types.Part.from_text(text="Please provide your final decision in JSON matching the schema.")]}],
-            config=final_config
-        )
 
-        if not final_res.text:
-            raise ValueError("Empty final response from Gemini")
+        res_text = final_completion.choices[0].message.content
+        if not res_text:
+            raise ValueError("Empty final response from Groq")
             
-        data = json.loads(final_res.text)
+        data = json.loads(res_text)
         return TraderDecision(**data)
         
     except Exception as e:
@@ -241,19 +231,21 @@ async def _run_risk_manager(symbol: str, prompt: str) -> RiskDecision | None:
     client = get_async_client()
     if not client: return None
     try:
-        res = await client.aio.models.generate_content(
-            model=settings.GEMINI_MODEL,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=RISK_SYSTEM_PROMPT,
-                response_mime_type="application/json",
-                response_schema=RiskDecision,
-                temperature=0.0
-            )
+        schema_json = RiskDecision.model_json_schema()
+        system_msg = f"{RISK_SYSTEM_PROMPT}\n\nYou must return a valid JSON object adhering to the following JSON schema:\n{json.dumps(schema_json)}"
+        completion = await client.chat.completions.create(
+            model=settings.GROQ_MODEL,
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.0
         )
-        if not res.text:
-            raise ValueError("Empty response from Gemini")
-        data = json.loads(res.text)
+        res_text = completion.choices[0].message.content
+        if not res_text:
+            raise ValueError("Empty response from Groq")
+        data = json.loads(res_text)
         return RiskDecision(**data)
     except Exception as e:
         log.warning(f"Risk Manager error for {symbol}: {e}")
@@ -265,13 +257,10 @@ async def evaluate_symbol_pipeline(symbol: str, bars_summary: str, news_summary:
     analyst_prompt = build_analyst_prompt(symbol, bars_summary, news_summary, vol_regime, event_context)
     
     # 1. Concurrent Bull and Bear
-    log.info(f"[{symbol}] Starting concurrent Bull and Bear Analyst evaluation with Gemini...")
+    log.info(f"[{symbol}] Starting concurrent Bull and Bear Analyst evaluation with Groq...")
     obs.update_stage("BULL", "PROCESSING")
     obs.update_stage("BEAR", "PROCESSING")
     
-    # We must redefine the retry decorator for the caller if we pass schema_class, 
-    # but since _run_analyst is already decorated, we just pass the class.
-    # We need to make sure the decorator works with Any return type.
     bull_task = asyncio.create_task(_run_analyst(symbol, analyst_prompt, BULL_SYSTEM_PROMPT, BullDecision))
     bear_task = asyncio.create_task(_run_analyst(symbol, analyst_prompt, BEAR_SYSTEM_PROMPT, BearDecision))
     

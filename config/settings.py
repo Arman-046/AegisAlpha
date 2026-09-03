@@ -7,10 +7,9 @@ class Settings(BaseSettings):
     # API Keys
     APCA_API_KEY_ID: str = Field(..., description="Alpaca Paper API Key")
     APCA_API_SECRET_KEY: str = Field(..., description="Alpaca Paper API Secret")
-    GEMINI_API_KEY: str = Field(..., description="Google Gemini API Key")
-    
-    # Model
-    GEMINI_MODEL: str = Field(default="gemini-3.5-flash", description="Gemini Model ID")
+    # AI API keys
+    GROQ_API_KEY: str = Field(default="PK_DUMMY", env="GROQ_API_KEY")
+    GROQ_MODEL: str = Field(default="openai/gpt-oss-20b", env="GROQ_MODEL")
     
     # Execution Mode
     TRADING_MODE: str = Field(default="paper", description="Execution mode: 'paper' or 'demo'")

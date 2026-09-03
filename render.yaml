@@ -4,15 +4,21 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
+services:
+  - type: web
+    name: aegisalpha
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
     startCommand: bash start.sh
     envVars:
       - key: APCA_API_KEY_ID
         sync: false
       - key: APCA_API_SECRET_KEY
         sync: false
-      - key: GEMINI_API_KEY
+      - key: GROQ_API_KEY
         sync: false
-      - key: GEMINI_MODEL
-        value: "gemini-3.5-flash"
+      - key: GROQ_MODEL
+        value: "openai/gpt-oss-20b"
       - key: PAPER
         value: "True"
