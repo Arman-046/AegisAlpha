@@ -80,7 +80,9 @@ def get_async_client():
 
 def is_transient_error(e: Exception) -> bool:
     err_str = str(e).lower()
-    if "400" in err_str or "401" in err_str or "403" in err_str or "404" in err_str:
+    # 401=auth invalid, 403=forbidden, 404=not found — NOT retryable
+    # 400 JSON generation failures from Groq ARE transient — allow retry
+    if "401" in err_str or "403" in err_str or "404" in err_str:
         return False
     return True
 
@@ -159,68 +161,31 @@ async def _run_analyst(symbol: str, prompt: str, system_prompt: str, schema_clas
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception(is_transient_error), reraise=False, retry_error_callback=lambda rs: None)
 async def _run_trader(symbol: str, prompt: str) -> TraderDecision | None:
+    """Runs the Trader/Synthesizer agent using direct JSON response format.
+    
+    NOTE: Tool-calling was removed because the openai/gpt-oss models on Groq
+    incorrectly treat 'json' as a tool name, causing 400 errors. The trader
+    has all necessary context in the prompt from the Bull/Bear analysts.
+    """
     client = get_async_client()
     if not client: return None
     try:
-        messages = [
-            {"role": "system", "content": TRADER_SYSTEM_PROMPT},
-            {"role": "user", "content": prompt}
-        ]
+        schema_json = TraderDecision.model_json_schema()
+        system_msg = f"{TRADER_SYSTEM_PROMPT}\n\nYou must return a valid JSON object adhering to the following JSON schema:\n{json.dumps(schema_json)}"
         
         completion = await client.chat.completions.create(
             model=settings.GROQ_MODEL,
-            messages=messages,
-            tools=get_groq_tools(),
-            tool_choice="auto",
-            temperature=0.0
-        )
-        
-        response_message = completion.choices[0].message
-        
-        while response_message.tool_calls:
-            messages.append(response_message.model_dump(exclude_unset=True))
-            
-            for tool_call in response_message.tool_calls:
-                tool_name = tool_call.function.name
-                tool_args = json.loads(tool_call.function.arguments) if tool_call.function.arguments else {}
-                
-                log.info(f"Trader requested tool: {tool_name} with {tool_args}")
-                tool_result = await mcp_client.execute_tool(tool_name, tool_args)
-                
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "name": tool_name,
-                    "content": json.dumps({"result": tool_result})
-                })
-                
-            completion = await client.chat.completions.create(
-                model=settings.GROQ_MODEL,
-                messages=messages,
-                tools=get_groq_tools(),
-                tool_choice="auto",
-                temperature=0.0
-            )
-            response_message = completion.choices[0].message
-
-        # Final pass to ensure we get structured output matching TraderDecision
-        schema_json = TraderDecision.model_json_schema()
-        messages.append({
-            "role": "user",
-            "content": f"Please provide your final decision in JSON matching this schema:\n{json.dumps(schema_json)}"
-        })
-        
-        final_completion = await client.chat.completions.create(
-            model=settings.GROQ_MODEL,
-            messages=messages,
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": prompt}
+            ],
             response_format={"type": "json_object"},
             temperature=0.0
         )
-
-        res_text = final_completion.choices[0].message.content
+        
+        res_text = completion.choices[0].message.content
         if not res_text:
-            raise ValueError("Empty final response from Groq")
-            
+            raise ValueError("Empty response from Groq")
         data = json.loads(res_text)
         return TraderDecision(**data)
         
