@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     APCA_API_SECRET_KEY: str = Field(..., description="Alpaca Paper API Secret")
     # AI API keys
     GROQ_API_KEY: str = Field(default="PK_DUMMY", env="GROQ_API_KEY")
-    GROQ_MODEL: str = Field(default="llama3-70b-8192", env="GROQ_MODEL")
+    GROQ_MODEL: str = Field(default="openai/gpt-oss-20b", env="GROQ_MODEL")
     
     # Execution Mode
     TRADING_MODE: str = Field(default="paper", description="Execution mode: 'paper' or 'demo'")
