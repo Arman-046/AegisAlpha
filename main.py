@@ -30,7 +30,7 @@ from risk.hard_limits import (
 )
 from execution.engine import ExecutionEngine, LivePaperExecutionEngine
 from execution.reconciliation import verify_order_state
-from positions.monitor import evaluate_and_exit_positions
+from execution.execution_agent import evaluate_and_exit_positions
 from app_logging.logger import get_logger
 from state.observability import obs
 
@@ -53,19 +53,21 @@ async def process_symbol(event: Event, open_positions: int) -> dict | None:
     obs.update_stage("DATA", "PROCESSING")
     bars = fetch_stock_bars(symbol)
     news = fetch_news(symbol)
+    spy_bars = fetch_stock_bars("SPY")
     
     bars_summary = f"{len(bars)} days of data" if bars else "No data"
     news_summary = f"{len(news)} recent articles" if news else "No news"
+    spy_bars_summary = f"{len(spy_bars)} days of data" if spy_bars else "No data"
     vol_regime = calculate_realized_volatility_percentile(bars) if bars else "Normal"
     recent_context = memory.get_recent_context()
     
     obs.log_activity(f"Market data gathered for {symbol}. Volatility Regime: {vol_regime}")
     obs.update_stage("DATA", "COMPLETED")
     
-    # Run 4-role pipeline
+    # Run pipeline
     trader_decision, risk_decision = await evaluate_symbol_pipeline(
         symbol, bars_summary, news_summary, vol_regime, recent_context, 
-        memory.current_confidence_threshold, open_positions, event.market_context
+        memory.current_confidence_threshold, open_positions, event.market_context, spy_bars_summary
     )
     
     if not trader_decision:

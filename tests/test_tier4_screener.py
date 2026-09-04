@@ -64,4 +64,4 @@ async def test_generate_watchlist_gemini_fail_fallback(mock_eval, mock_quant):
     
     assert new_wl == old_watchlist
     assert obs.state["watchlist"]["status"] == "FAILED"
-    assert obs.state["watchlist"]["error"] == "GEMINI UNAVAILABLE"
+    assert obs.state["watchlist"]["error"] == "GROQ UNAVAILABLE"

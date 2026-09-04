@@ -42,18 +42,21 @@ This architecture ensures the agent rejects low-quality signals, resizes valid o
 
 AegisAlpha's core pipeline operates on a strict, unbreakable sequence:
 
-`EVENT → DATA → BULL + BEAR → TRADER → OPTION → RANK → RISK → EXECUTE → MONITOR`
+`EVENT → DATA → MACRO → BULL + BEAR → TRADER → OPTION → RANK → RISK → EXECUTE → MONITOR`
 
 ```mermaid
 flowchart TD
     subgraph DataLayer ["📡 Live Data Layer"]
         E["Event Streams (Price/News)"]
         A["Alpaca Live Options Data"]
+        M["Macro Environment (SPY)"]
     end
 
     subgraph Reasoning ["🗣️ Event-Driven Intelligence"]
-        E -->|Trigger| B["🐂 Bull Agent"]
-        E -->|Trigger| Be["🐻 Bear Agent"]
+        M --> MA["🌍 Macro Agent"]
+        E -->|Trigger| MA
+        MA -->|Threshold Mod| B["🐂 Bull Agent"]
+        MA -->|Threshold Mod| Be["🐻 Bear Agent"]
         B --> T["⚖️ Trader Synthesis"]
         Be --> T
     end
@@ -82,6 +85,9 @@ flowchart TD
 ### ⚡ Event-Driven Intelligence
 AegisAlpha relies on **zero polling**. The pipeline only evaluates a stock if triggered by a live event (e.g., a real-time price spike > 0.5% or breaking news via Alpaca Data Streams). 
 
+### 🌍 Macro Pre-Screener
+Before diving into a specific stock, a dedicated **Macro Agent** analyzes the broader market context (e.g., SPY historical volatility). If the macro environment is crashing or excessively volatile, it dynamically raises the confidence threshold required for the system to approve bullish trades.
+
 ### ⚖️ Bull / Bear Reasoning
 When triggered, AegisAlpha spins up two parallel Groq contexts: a Bull and a Bear. They each parse the exact same market event and construct opposing theses. A third "Trader" agent evaluates the debate to produce a final directional synthesis.
 
@@ -89,10 +95,13 @@ When triggered, AegisAlpha spins up two parallel Groq contexts: a Bull and a Bea
 If the Trader finds a signal, the system pulls live Alpaca Option Snapshots. It performs strict, deterministic quantitative checks (Bid/Ask spread limits, Open Interest > 10, DTE ranges). If a metric like Implied Volatility or Greeks is missing from the exchange, AegisAlpha fails closed and marks it `UNAVAILABLE`—it **never fabricates data**.
 
 ### 🏆 Engineering Quality Score
-Valid options are ranked deterministically from 0–100. **This is an Engineering Quality Score, not a prediction of profitability.** It is an objective composite of AI Confidence (40%), Market Volatility Context (20%), Option Delta proximity to ATM (20%), and Liquidity/Spread (20%). It ensures the system only targets high-quality structural setups.
+Valid options are ranked deterministically from 0–100. **This is an Engineering Quality Score, not a prediction of profitability.** It is an objective composite of AI Confidence (30%), Market Volatility Context (15%), Option Delta proximity to ATM (20%), Liquidity/Spread (20%), and **Implied Volatility Advantage** (15%). It ensures the system only targets high-quality structural setups and avoids IV crush.
 
 ### 🛑 Deterministic Risk Governor
 A strong AI conviction means nothing if the math doesn't align. The Risk Governor enforces strict, hardcoded limits: max 2% total equity risk per trade, sector concentration caps, and total directional exposure limits. The LLM cannot bypass this logic.
+
+### 🎯 Execution Agent & Dynamic Trailing Stops
+Once a trade is live, the **Execution Agent** takes over. Instead of rigid profit targets, it monitors open positions and engages a dynamic 15% trailing stop-loss once a trade hits a 20% unrealized profit, locking in gains automatically while protecting capital.
 
 ### 🗂️ Decision Journal & Explainability
 Every decision—whether it resulted in a trade or not—is logged transparently.
@@ -106,9 +115,11 @@ Every decision—whether it resulted in a trade or not—is logged transparently
 AegisAlpha includes a premium Streamlit dashboard to provide live, read-only observability of the agent.
 
 The dashboard cleanly separates:
-* **🔴 LIVE EXECUTIONS:** Actual trades submitted to Alpaca Paper Trading.
+* **🔴 LIVE EXECUTIONS:** Actual trades submitted to Alpaca Paper Trading, along with a live **Execution Agent Panel** showing trailing stop levels.
 * **🟡 COUNTERFACTUALS (WHAT-IF):** Safely rejected opportunities and AI logic paths that did not execute.
 * **⚙️ SYSTEM FAILURES:** Aborted evaluations due to API or data errors.
+
+Every Decision Journal entry features an interactive **Chain of Thought Expander**, allowing judges to peek into the exact Bull and Bear arguments the LLMs debated before making a decision. The dashboard also features a dynamic, visually stunning **Plotly Equity Curve** for maximum premium appeal.
 
 *Note: The dashboard strictly monitors real Alpaca paper activity. No fake statistics, simulated fills, or fabricated performance numbers are displayed.*
 
@@ -118,7 +129,7 @@ The dashboard cleanly separates:
 
 AegisAlpha is heavily tested with an uncompromising safety philosophy. 
 
-**Test Baseline:** 53 / 53 Passing Tests
+**Test Baseline:** 61 / 61 Passing Tests
 
 Safety Assertions Guaranteed:
 * Groq reasoning failures fail-closed immediately (AI UNAVAILABLE).

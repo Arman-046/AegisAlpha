@@ -7,7 +7,7 @@ def test_valid_settings():
     s = Settings(
         APCA_API_KEY_ID="test_key",
         APCA_API_SECRET_KEY="test_secret",
-        GEMINI_API_KEY="test_gemini",
+        GROQ_API_KEY="test_groq",
         PAPER=True,
         MAX_RISK_PERCENT=0.02,
         BASE_MIN_CONFIDENCE=0.65,

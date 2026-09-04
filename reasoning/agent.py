@@ -19,9 +19,11 @@ from reasoning.prompts import (
     PORTFOLIO_MANAGER_SYSTEM_PROMPT,
     build_analyst_prompt,
     build_trader_prompt,
-    build_risk_prompt
+    build_risk_prompt,
+    build_macro_prompt
 )
 
+from reasoning.macro_agent import _run_macro_agent
 from state.observability import obs
 
 log = get_logger(__name__)
@@ -251,8 +253,17 @@ async def _run_risk_manager(symbol: str, prompt: str) -> RiskDecision | None:
         log.warning(f"Risk Manager error for {symbol}: {e}")
         raise e
 
-async def evaluate_symbol_pipeline(symbol: str, bars_summary: str, news_summary: str, vol_regime: str, recent_context: str, threshold: float, open_positions: int, event_context: str = "") -> Tuple[TraderDecision | None, RiskDecision | None]:
-    """Runs the full four-role reasoning pipeline asynchronously."""
+async def evaluate_symbol_pipeline(symbol: str, bars_summary: str, news_summary: str, vol_regime: str, recent_context: str, threshold: float, open_positions: int, event_context: str = "", spy_bars_summary: str = "No data") -> Tuple[TraderDecision | None, RiskDecision | None]:
+    """Runs the full reasoning pipeline asynchronously."""
+    
+    # 0. Macro Pre-Screening
+    log.info(f"[{symbol}] Starting Macro Pre-Screening...")
+    macro_prompt = build_macro_prompt(spy_bars_summary, vol_regime)
+    macro_decision = await _run_macro_agent(macro_prompt)
+    if macro_decision:
+        log.info(f"[{symbol}] Macro Assessment: {macro_decision.market_assessment}. Threshold modifier: {macro_decision.threshold_modifier}")
+        threshold = max(0.0, min(1.0, threshold + macro_decision.threshold_modifier))
+        obs.log_activity(f"Macro Agent adjusted confidence threshold to {threshold:.2f}")
     
     analyst_prompt = build_analyst_prompt(symbol, bars_summary, news_summary, vol_regime, event_context)
     

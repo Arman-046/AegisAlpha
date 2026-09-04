@@ -37,7 +37,7 @@ async def test_gemini_failure_returns_failed(memory_mock, mock_fetchers):
         
         assert result is None
         memory_mock.add_decision.assert_called_once_with(
-            "AAPL", "neutral", 0.0, "FAILED", "AI UNAVAILABLE: Gemini API failure",
+            "AAPL", "neutral", 0.0, "FAILED", "AI UNAVAILABLE: Groq API failure",
             event=event, is_counterfactual=False, mode="LIVE_PAPER"
         )
 

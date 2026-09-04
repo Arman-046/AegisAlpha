@@ -56,13 +56,14 @@ def test_opportunity_score_deterministic():
     r1 = rank_opportunities([opp1])[0]
     r2 = rank_opportunities([opp2])[0]
     
-    # 0.8 * 40 = 32
-    # LOW = 20
+    # 0.8 * 30 = 24
+    # LOW = 15
     # delta 0.0 = 20
     # spread 0.0 = 20
-    # Total = 92
-    assert r1["rank_score"] == 92.0
-    assert r2["rank_score"] == 92.0
+    # IV (unavailable) = 7.5
+    # Total = 86.5
+    assert r1["rank_score"] == 86.5
+    assert r2["rank_score"] == 86.5
     assert r1["rank_score"] == r2["rank_score"]
 
 def test_opportunity_score_bounds():

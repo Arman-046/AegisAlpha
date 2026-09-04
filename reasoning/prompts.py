@@ -23,6 +23,19 @@ You must return strict JSON matching this schema:
 }
 """
 
+MACRO_SYSTEM_PROMPT = """You are the Macro Context Agent.
+Before we evaluate individual stocks, assess the broader market conditions (like SPY/QQQ/VIX equivalents) to determine the overall risk environment.
+If the broader market is highly volatile, crashing, or extremely uncertain, you should suggest a higher confidence threshold for the Trader agent.
+If the market is stable and bullish, you can suggest a normal or slightly lowered threshold.
+
+You must return strict JSON matching this schema:
+{
+    "market_assessment": "string describing the macro environment",
+    "threshold_modifier": float (-0.2 to +0.3, where +0.3 requires the highest confidence to trade)
+}
+"""
+
+
 TRADER_SYSTEM_PROMPT = """You are the Trader / Synthesizer.
 Review the market context, the Bull Analyst's argument, the Bear Analyst's argument, and the recent-decision memory.
 Decide on a trading direction and whether a genuine opportunity exists. Note: "NO TRADE" is a highly acceptable outcome if the opportunity is weak.
@@ -99,6 +112,15 @@ def build_risk_prompt(symbol: str, direction: str, confidence: float, vol_regime
     Proposed Confidence: {confidence}
     Volatility Regime: {vol_regime}
     Current Open Positions: {open_positions}
+    
+    Produce your JSON response now.
+    """
+
+def build_macro_prompt(spy_bars_summary: str, current_vol_regime: str) -> str:
+    return f"""
+    Evaluate the current macro environment.
+    Broad Market Context (SPY): {spy_bars_summary}
+    Current Strategy Volatility Regime: {current_vol_regime}
     
     Produce your JSON response now.
     """
