@@ -6,10 +6,10 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Alpaca API](https://img.shields.io/badge/Alpaca-Brokerage-yellow.svg)](https://alpaca.markets/)
-[![Groq](https://img.shields.io/badge/AI-Groq-blue.svg)](https://deepmind.google/technologies/gemini/)
+[![Groq](https://img.shields.io/badge/AI-Groq-ff4b4b.svg)](https://groq.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-*AI Proposes. Data Informs. Risk Governs. Code Executes.*
+*AegisAlpha is a Tier 4 autonomous trading pipeline that leverages multi-agent AI and deterministic risk governance to turn real-time market catalysts into executed options trades via Alpaca.*
 
 </div>
 
@@ -17,9 +17,19 @@
 
 ## 📖 What is AegisAlpha?
 
-**AegisAlpha** is an advanced, fully autonomous options trading agent. It bridges the reasoning capabilities of **Google Groq** with the execution power of the **Alpaca Brokerage**. 
+**AegisAlpha** is an autonomous, event-driven options trading agent built for the Alpaca AI Trading Agents Hackathon. 
 
-Unlike naive LLM trading bots that blindly buy based on sentiment, AegisAlpha implements a **strict separation of concerns**. It uses independent LLM roles (Bull vs. Bear) to debate an asset's direction, quantitatively scores opportunities using an Engineering Quality Score, and routes every decision through a **Deterministic Risk Governor** that enforces hard portfolio limits before execution. 
+Instead of blindly polling an AI to guess market directions on a static watchlist, AegisAlpha utilizes a **Tier 4 Autonomous AI Screener** to actively hunt for meaningful market catalysts. When a significant event is detected, the pipeline triggers a high-speed, multi-agent debate (powered by Groq). Independent "Bull" and "Bear" AI agents gather real-time market data and synthesize opposing arguments before a final "Trader" agent forms a concrete trading thesis.
+
+The agent then selects and validates a specific options contract using quantitative factors—such as liquidity, spread, DTE, Greeks, Implied Volatility, and pricing—before assigning a transparent 0–100 Opportunity Score.
+
+Most importantly, **AI does not control risk.** A deterministic Python Risk Governor acts as an absolute circuit breaker. It enforces hard position limits, drawdown protection, PDT compliance, exposure limits, liquidity checks, and slippage protection. Even if the AI is overwhelmingly confident and wants to trade, the Risk Governor has the final authority to say NO.
+
+Approved paper trades are executed flawlessly through Alpaca and managed automatically via dynamic trailing stops. Every single step of this pipeline—including the AI's internal reasoning, counterfactual rejections, and system vetoes—is broadcast in real-time to a premium, institutional-grade **Observability Dashboard (The Decision Journal)**. 
+
+*AI proposes. Data informs. Risk governs. Code executes.*
+
+AegisAlpha is not designed to predict markets with certainty. It is designed to make autonomous trading decisions explainable, strictly controlled, and highly survivable.
 
 ---
 
@@ -82,59 +92,38 @@ flowchart TD
 
 ## ✨ Core Mechanics
 
-### ⚡ Event-Driven Intelligence
-AegisAlpha relies on **zero polling**. The pipeline only evaluates a stock if triggered by a live event (e.g., a real-time price spike > 0.5% or breaking news via Alpaca Data Streams). 
+### ⚡ Tier 4 Autonomous AI Screener
+AegisAlpha does not trade a static list. The agent actively scores live market catalysts, scraping news and momentum metrics to dynamically construct and refresh its own watchlist.
 
 ### 🌍 Macro Pre-Screener
 Before diving into a specific stock, a dedicated **Macro Agent** analyzes the broader market context (e.g., SPY historical volatility). If the macro environment is crashing or excessively volatile, it dynamically raises the confidence threshold required for the system to approve bullish trades.
 
-### ⚖️ Bull / Bear Reasoning
-When triggered, AegisAlpha spins up two parallel Groq contexts: a Bull and a Bear. They each parse the exact same market event and construct opposing theses. A third "Trader" agent evaluates the debate to produce a final directional synthesis.
-
-### 🛡️ Tradeability Validation
-If the Trader finds a signal, the system pulls live Alpaca Option Snapshots. It performs strict, deterministic quantitative checks (Bid/Ask spread limits, Open Interest > 10, DTE ranges). If a metric like Implied Volatility or Greeks is missing from the exchange, AegisAlpha fails closed and marks it `UNAVAILABLE`—it **never fabricates data**.
+### ⚖️ Adversarial AI Reasoning (Bull vs Bear)
+When triggered, AegisAlpha spins up two parallel Groq contexts: a Bull and a Bear. They each parse the exact same market event and construct opposing theses. A third "Trader" agent evaluates the debate to produce a final directional synthesis, effectively eliminating AI hallucination traps.
 
 ### 🏆 Engineering Quality Score
-Valid options are ranked deterministically from 0–100. **This is an Engineering Quality Score, not a prediction of profitability.** It is an objective composite of AI Confidence (30%), Market Volatility Context (15%), Option Delta proximity to ATM (20%), Liquidity/Spread (20%), and **Implied Volatility Advantage** (15%). It ensures the system only targets high-quality structural setups and avoids IV crush.
+Valid options are ranked deterministically from 0–100. **This is an Engineering Quality Score, not a prediction of profitability.** It is an objective composite of AI Confidence (30%), Market Volatility Context (15%), Option Delta proximity to ATM (20%), Liquidity/Spread (20%), and **Implied Volatility Advantage** (15%). 
 
-### 🛑 Deterministic Risk Governor
+### 🛑 Deterministic Risk Governance
 A strong AI conviction means nothing if the math doesn't align. The Risk Governor enforces strict, hardcoded limits: max 2% total equity risk per trade, sector concentration caps, and total directional exposure limits. The LLM cannot bypass this logic.
-
-### 🎯 Execution Agent & Dynamic Trailing Stops
-Once a trade is live, the **Execution Agent** takes over. Instead of rigid profit targets, it monitors open positions and engages a dynamic 15% trailing stop-loss once a trade hits a 20% unrealized profit, locking in gains automatically while protecting capital.
 
 ### 🗂️ Decision Journal & Explainability
 Every decision—whether it resulted in a trade or not—is logged transparently.
-* **Counterfactuals (What-Ifs):** Rejected valid opportunities (e.g., vetoed by Risk, low Engineering Quality Score, or illiquid options) are securely logged but strictly isolated. They do not contaminate live P&L statistics.
+* **Counterfactuals (What-Ifs):** Rejected valid opportunities (e.g., vetoed by Risk, low Engineering Quality Score, or illiquid options) are securely logged but strictly isolated. 
 * **System Failures:** API timeouts (AI UNAVAILABLE) or stale data correctly abort the pipeline without masquerading as valid trading logic.
 
 ---
 
-## 📊 Dashboard & Observability
+## 📊 The Decision Journal (UI Dashboard)
 
-AegisAlpha includes a premium Streamlit dashboard to provide live, read-only observability of the agent.
+AegisAlpha includes a premium Streamlit dashboard to provide live, read-only observability of the agent's internal state.
 
 The dashboard cleanly separates:
-* **🔴 LIVE EXECUTIONS:** Actual trades submitted to Alpaca Paper Trading, along with a live **Execution Agent Panel** showing trailing stop levels.
+* **🔴 LIVE EXECUTIONS:** Actual trades submitted to Alpaca Paper Trading, along with a live **Execution Agent Panel** showing dynamic trailing stop levels.
 * **🟡 COUNTERFACTUALS (WHAT-IF):** Safely rejected opportunities and AI logic paths that did not execute.
 * **⚙️ SYSTEM FAILURES:** Aborted evaluations due to API or data errors.
 
-Every Decision Journal entry features an interactive **Chain of Thought Expander**, allowing judges to peek into the exact Bull and Bear arguments the LLMs debated before making a decision. The dashboard also features a dynamic, visually stunning **Plotly Equity Curve** for maximum premium appeal.
-
-*Note: The dashboard strictly monitors real Alpaca paper activity. No fake statistics, simulated fills, or fabricated performance numbers are displayed.*
-
----
-
-## 🛠️ Testing & Safety Philosophy
-
-AegisAlpha is heavily tested with an uncompromising safety philosophy. 
-
-**Test Baseline:** 61 / 61 Passing Tests
-
-Safety Assertions Guaranteed:
-* Groq reasoning failures fail-closed immediately (AI UNAVAILABLE).
-* Counterfactual records explicitly cannot influence Live Execution Statistics.
-* Deterministic Risk rejections mathematically cannot reach the Alpaca order execution layer.
+Every Decision Journal entry features an interactive **Chain of Thought Expander**, allowing you to peek into the exact Bull and Bear arguments the LLMs debated before making a decision. 
 
 ---
 
@@ -161,23 +150,18 @@ Safety Assertions Guaranteed:
 
 ### Running the Agent Locally
 
-AegisAlpha is strictly a **Demo Mode / Simulation Only** paper-trading application.
-
-1. **Start the Autonomous Agent:**
+1. **Start the Autonomous Agent (Backend):**
    ```bash
    python main.py
    ```
-2. **Start the Live Dashboard (Optional, separate terminal):**
+2. **Start the Live Dashboard (Frontend):**
    ```bash
    streamlit run dashboard.py
    ```
 
-### Trading Modes
-
-AegisAlpha supports two explicit modes configured via `TRADING_MODE` in `.env`:
-
-* **`paper`**: Real-time integration with Alpaca Paper Trading. The agent listens to live market data streams and executes real paper trades.
-* **`demo`**: A deterministic educational simulation. This mode uses static, controlled fixture data to demonstrate the system's reasoning pipeline and Risk Governor without requiring live market conditions or Alpaca market-data credentials. It will never send a real order and can be run 24/7, even when markets are closed.
+### The Cinematic Demo Simulator 🟡
+AegisAlpha includes a specialized `Demo Mode` built directly into the UI.
+Rather than waiting for unpredictable live market hours during a pitch, toggling "Demo Simulator" triggers a fully choreographed, high-fidelity presentation sequence. It dynamically generates randomized P&L mock data, walks the audience through the 3-phase AI reasoning pipeline, and smoothly auto-scrolls the Decision Journal to perfectly demonstrate the architecture in exactly 10 seconds.
 
 ---
 
