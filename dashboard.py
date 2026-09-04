@@ -12,7 +12,7 @@ st.set_page_config(
     page_title="AegisAlpha | Autonomous Agent",
     page_icon="premium_logo.png",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 # Premium CSS Injection
@@ -165,7 +165,8 @@ def get_alpaca_client():
     return TradingClient(settings.APCA_API_KEY_ID, settings.APCA_API_SECRET_KEY, paper=settings.PAPER)
 
 def load_observability():
-    obs_file = "state/observability.json"
+    is_demo = st.session_state.get("demo_mode", False)
+    obs_file = "state/demo_observability.json" if is_demo else "state/observability.json"
     if os.path.exists(obs_file):
         try:
             with open(obs_file, "r") as f:
@@ -207,6 +208,35 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+with st.sidebar:
+    st.header("Mode Selection")
+    
+    # Setup toggle state
+    if "demo_mode" not in st.session_state:
+        st.session_state.demo_mode = False
+        
+    demo_mode = st.toggle("Demo Simulator 🟡", value=st.session_state.demo_mode, key="demo_mode_toggle")
+    
+    if demo_mode != st.session_state.demo_mode:
+        st.session_state.demo_mode = demo_mode
+        if demo_mode:
+            import demo_runner
+            demo_runner.reset_data()
+        st.rerun()
+        
+    if st.session_state.demo_mode:
+        st.markdown("<style>.stApp { border-top: 4px solid #fbbf24; }</style>", unsafe_allow_html=True)
+        st.markdown("### Simulation Controls")
+        if st.button("🚀 Run Autonomous Agent", use_container_width=True, type="primary"):
+            st.toast("Initializing Cinematic Demo Sequence...", icon="🔄")
+            import demo_runner
+            import threading
+            threading.Thread(target=demo_runner.run_golden_path, daemon=True).start()
+            time.sleep(0.5)
+            st.rerun()
+    else:
+        st.markdown("<style>.stApp { border-top: 4px solid #10b981; }</style>", unsafe_allow_html=True)
+
 @st.fragment(run_every="2s")
 def render_dashboard_body():
     obs = load_observability()
@@ -218,8 +248,8 @@ def render_dashboard_body():
         st.markdown("### SYSTEM STATUS")
 
         is_live = "LIVE PAPER" if settings.PAPER else "LIVE"
-        is_demo = settings.TRADING_MODE == "demo"
-        env_badge = "🔵 DEMO MODE — SIMULATION ONLY (NO REAL ORDERS)" if is_demo else f"🟢 {is_live} — REAL ALPACA PAPER ACCOUNT"
+        is_demo = st.session_state.get("demo_mode", False)
+        env_badge = "🟡 DEMO MODE — SIMULATION ONLY (ZERO COST)" if is_demo else f"🟢 {is_live} — REAL ALPACA PAPER ACCOUNT"
 
         agent_status = obs.get("status", "STOPPED") if obs else "STOPPED"
         hb_time = obs.get("last_heartbeat", 0) if obs else 0
@@ -241,7 +271,7 @@ def render_dashboard_body():
 
         html_content = f"""
         <div class="premium-card">
-            <div style="font-weight: 800; margin-bottom: 24px; color: {'#3b82f6' if is_demo else '#10b981'}; font-size: 1.1rem;">{env_badge}</div>
+            <div style="font-weight: 800; margin-bottom: 24px; color: {'#fbbf24' if is_demo else '#10b981'}; font-size: 1.1rem;">{env_badge}</div>
 
             <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; font-size: 1.1rem;">
                 <div style="display: flex; justify-content: space-between;">
@@ -258,7 +288,7 @@ def render_dashboard_body():
                 </div>
                 <div style="display: flex; justify-content: space-between;">
                     <span style="color: #94a3b8;">● Alpaca API</span>
-                    <span style="color: {'#10b981' if not is_demo else '#3b82f6'}; font-weight: bold;">{'CONNECTED' if not is_demo else 'MOCKED'}</span>
+                    <span style="color: {'#10b981' if not is_demo else '#fbbf24'}; font-weight: bold;">{'CONNECTED' if not is_demo else 'MOCKED'}</span>
                 </div>
             </div>
 
@@ -528,109 +558,212 @@ def render_dashboard_body():
 
     with col8:
         st.markdown("### PORTFOLIO & P&L")
-        client = get_alpaca_client()
-        if client:
+        is_demo = st.session_state.get("demo_mode", False)
+        if is_demo:
             try:
-                account = client.get_account()
-                eq = float(account.equity)
-                last_eq = float(account.last_equity)
-                today_pnl = eq - last_eq
-                today_pnl_pct = (today_pnl / last_eq) * 100 if last_eq > 0 else 0
+                import json
+                port = json.load(open("state/demo_portfolio.json"))
+                eq = port.get("eq", 25000.0)
+                last_eq = port.get("last_eq", 25000.0)
+                today_pnl = port.get("pnl", 0.0)
+            except:
+                eq, last_eq, today_pnl = 0.0, 0.0, 0.0
+            
+            today_pnl_pct = (today_pnl / last_eq) * 100 if last_eq > 0 else 0
+            pnl_color = "#10b981" if today_pnl >= 0 else "#ef4444"
+            pnl_sign = "+" if today_pnl >= 0 else ""
+            import numpy as np
+            points = 20
+            mock_curve = np.linspace(last_eq, eq, points) + np.random.normal(0, abs(today_pnl)*0.1 if today_pnl else 50, points)
+            mock_curve[-1] = eq
+            
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(y=mock_curve, mode='lines', line=dict(color=pnl_color, width=3), fill='tozeroy', fillcolor='rgba(16, 185, 129, 0.1)'))
+            fig.update_layout(
+                margin=dict(l=0, r=0, t=0, b=0), height=80, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
+            )
 
-                pnl_color = "#10b981" if today_pnl >= 0 else "#ef4444"
-                pnl_sign = "+" if today_pnl >= 0 else ""
-
-                # Plotly Chart Generation (Visual Flair)
-                # To simulate an equity curve for the hackathon, we create a dynamic curve ending at current equity
-                # In a full production app, this would query a timeseries DB.
-                import numpy as np
-                points = 20
-                if today_pnl >= 0:
-                    mock_curve = np.linspace(last_eq, eq, points) + np.random.normal(0, abs(today_pnl)*0.1, points)
-                else:
-                    mock_curve = np.linspace(last_eq, eq, points) + np.random.normal(0, abs(today_pnl)*0.1, points)
-                mock_curve[-1] = eq # ensure it ends exactly on current equity
-                
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(y=mock_curve, mode='lines', line=dict(color=pnl_color, width=3), fill='tozeroy', fillcolor=f'rgba({16 if today_pnl >= 0 else 239}, {185 if today_pnl >= 0 else 68}, {129 if today_pnl >= 0 else 68}, 0.1)'))
-                fig.update_layout(
-                    margin=dict(l=0, r=0, t=0, b=0), height=80, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                    xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                    yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
-                )
-
-                st.markdown(f"""
-                <div class="premium-card" style="padding-bottom: 0;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px;">
-                        <div>
-                            <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">TOTAL EQUITY</div>
-                            <div style="font-size: 2.5rem; font-weight: 800; color: #f8fafc;">${eq:,.2f}</div>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">TODAY'S P&L</div>
-                            <div style="font-size: 1.5rem; font-weight: 800; color: {pnl_color};">{pnl_sign}${today_pnl:,.2f} ({pnl_sign}{today_pnl_pct:.2f}%)</div>
-                        </div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            except Exception as e:
-                st.markdown(f"<div class='premium-card' style='color:#ef4444'>Failed to fetch Alpaca account: {e}</div>", unsafe_allow_html=True)
-        else:
-            st.markdown("""
-            <div class="premium-card">
+            st.markdown(f"""
+            <div class="premium-card" style="padding-bottom: 0;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px;">
                     <div>
                         <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">TOTAL EQUITY</div>
-                        <div style="font-size: 2.5rem; font-weight: 800; color: #94a3b8;">$0.00</div>
+                        <div style="font-size: 2.5rem; font-weight: 800; color: #fbbf24;">${eq:,.2f}</div>
                     </div>
                     <div style="text-align: right;">
                         <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">TODAY'S P&L</div>
-                        <div style="font-size: 1.5rem; font-weight: 800; color: #94a3b8;">+$0.00 (+0.00%)</div>
+                        <div style="font-size: 1.5rem; font-weight: 800; color: {pnl_color};">{pnl_sign}${today_pnl:,.2f} ({pnl_sign}{today_pnl_pct:.2f}%)</div>
                     </div>
-                </div>
-                <div style="font-size: 0.95rem; color: #94a3b8; line-height: 1.5; border-top: 1px solid #1e293b; padding-top: 16px;">
-                    <strong>Demo Mode: No realized P&L.</strong><br>
-                    AegisAlpha does not create trades simply to generate performance.
                 </div>
             </div>
             """, unsafe_allow_html=True)
-
-    # 6.5. LIVE POSITION MANAGEMENT (NEW)
-    st.markdown("### 🛡️ EXECUTION AGENT: LIVE POSITIONS")
-    client = get_alpaca_client()
-    if client:
-        try:
-            positions = client.get_all_positions()
-            options = [p for p in positions if "us_option" in str(p.asset_class)]
-            if not options:
-                st.markdown("<div class='premium-card' style='text-align: center; color: #94a3b8;'>No active positions managed by Execution Agent.</div>", unsafe_allow_html=True)
-            else:
-                pos_html = "<div class='premium-card'>"
-                for p in options:
-                    pl = float(p.unrealized_plpc) * 100
-                    pl_color = "#10b981" if pl >= 0 else "#ef4444"
-                    # Mocking HWM for visual effect
-                    hwm = pl if pl > 0 else 0
-                    stop_level = hwm - 15.0 if hwm > 20.0 else -50.0
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+            
+            st.markdown(f"""
+            <div class="premium-card" style="margin-top: -10px; padding: 16px;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 8px;">
+                    <span style="color: #94a3b8;">Buying Power: <strong style="color: #f8fafc;">$101,802.00</strong></span>
+                    <span style="color: #94a3b8;">Cash: <strong style="color: #f8fafc;">$21,000.00</strong></span>
+                    <span style="color: #10b981; font-weight: 700;">PDT: SAFE (0/3)</span>
+                </div>
+                <div style="width: 100%; background-color: #1e293b; border-radius: 4px; height: 6px; overflow: hidden; margin-bottom: 4px;">
+                    <div style="width: 17%; background-color: #38bdf8; height: 100%;"></div>
+                </div>
+                <div style="font-size: 0.75rem; color: #64748b; text-align: right;">17.4% Capital Deployed</div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            client = get_alpaca_client()
+            if client:
+                try:
+                    account = client.get_account()
+                    eq = float(account.equity)
+                    last_eq = float(account.last_equity)
+                    bp = float(account.buying_power)
+                    cash = float(account.cash)
                     
-                    pos_html += f"""
-                    <div style='display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #1e293b;'>
-                        <div><strong style='color:#f8fafc; font-size: 1.1rem;'>{p.symbol}</strong> <span style='color:#64748b; font-size:0.85rem;'>QTY: {abs(float(p.qty))}</span></div>
-                        <div style='color:{pl_color}; font-weight: 800;'>{'+' if pl >= 0 else ''}{pl:.2f}%</div>
-                        <div style='color:#38bdf8; font-size: 0.85rem;'>Trailing Stop: {stop_level:.1f}%</div>
+                    try:
+                        pdt_count = int(getattr(account, 'daytrade_count', 0))
+                    except:
+                        pdt_count = 0
+                        
+                    pdt_color = "#10b981" if pdt_count < 3 else "#ef4444"
+                    pdt_text = "SAFE" if pdt_count < 3 else "WARNING"
+                    
+                    deployed_pct = ((eq - cash) / eq) * 100 if eq > 0 else 0
+                    deployed_color = "#38bdf8" if deployed_pct < 80 else "#f59e0b"
+                    
+                    today_pnl = eq - last_eq
+                    today_pnl_pct = (today_pnl / last_eq) * 100 if last_eq > 0 else 0
+    
+                    pnl_color = "#10b981" if today_pnl >= 0 else "#ef4444"
+                    pnl_sign = "+" if today_pnl >= 0 else ""
+    
+                    import numpy as np
+                    points = 20
+                    mock_curve = np.linspace(last_eq, eq, points) + np.random.normal(0, abs(today_pnl)*0.1, points)
+                    mock_curve[-1] = eq # ensure it ends exactly on current equity
+                    
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(y=mock_curve, mode='lines', line=dict(color=pnl_color, width=3), fill='tozeroy', fillcolor=f'rgba({16 if today_pnl >= 0 else 239}, {185 if today_pnl >= 0 else 68}, {129 if today_pnl >= 0 else 68}, 0.1)'))
+                    fig.update_layout(
+                        margin=dict(l=0, r=0, t=0, b=0), height=80, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
+                    )
+    
+                    st.markdown(f"""
+                    <div class="premium-card" style="padding-bottom: 0;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px;">
+                            <div>
+                                <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">TOTAL EQUITY</div>
+                                <div style="font-size: 2.5rem; font-weight: 800; color: #f8fafc;">${eq:,.2f}</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">TODAY'S P&L</div>
+                                <div style="font-size: 1.5rem; font-weight: 800; color: {pnl_color};">{pnl_sign}${today_pnl:,.2f} ({pnl_sign}{today_pnl_pct:.2f}%)</div>
+                            </div>
+                        </div>
                     </div>
-                    """
-                pos_html += "</div>"
-                st.markdown(pos_html, unsafe_allow_html=True)
+                    """, unsafe_allow_html=True)
+                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                    
+                    st.markdown(f"""
+                    <div class="premium-card" style="margin-top: -10px; padding: 16px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 8px;">
+                            <span style="color: #94a3b8;">Buying Power: <strong style="color: #f8fafc;">${bp:,.2f}</strong></span>
+                            <span style="color: #94a3b8;">Cash: <strong style="color: #f8fafc;">${cash:,.2f}</strong></span>
+                            <span style="color: {pdt_color}; font-weight: 700;">PDT: {pdt_text} ({pdt_count}/3)</span>
+                        </div>
+                        <div style="width: 100%; background-color: #1e293b; border-radius: 4px; height: 6px; overflow: hidden; margin-bottom: 4px;">
+                            <div style="width: {deployed_pct}%; background-color: {deployed_color}; height: 100%;"></div>
+                        </div>
+                        <div style="font-size: 0.75rem; color: #64748b; text-align: right;">{deployed_pct:.1f}% Capital Deployed</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                except Exception as e:
+                    st.markdown(f"<div class='premium-card' style='color:#ef4444'>Failed to fetch Alpaca account: {e}</div>", unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                <div class="premium-card">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px;">
+                        <div>
+                            <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">TOTAL EQUITY</div>
+                            <div style="font-size: 2.5rem; font-weight: 800; color: #94a3b8;">$0.00</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">TODAY'S P&L</div>
+                            <div style="font-size: 1.5rem; font-weight: 800; color: #94a3b8;">+$0.00 (+0.00%)</div>
+                        </div>
+                    </div>
+                    <div style="font-size: 0.95rem; color: #94a3b8; line-height: 1.5; border-top: 1px solid #1e293b; padding-top: 16px;">
+                        <strong>Agent not connected to Alpaca.</strong><br>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+    st.markdown("### 🛡️ EXECUTION AGENT: LIVE POSITIONS")
+    is_demo = st.session_state.get("demo_mode", False)
+    if is_demo:
+        try:
+            import json
+            port = json.load(open("state/demo_portfolio.json"))
+            demo_positions = port.get("positions", [])
         except:
-            pass
+            demo_positions = []
+            
+        if not demo_positions:
+            st.markdown("<div class='premium-card' style='text-align: center; color: #94a3b8;'>No active positions managed by Execution Agent.</div>", unsafe_allow_html=True)
+        else:
+            pos_html = "<div class='premium-card'>"
+            for p in demo_positions:
+                pl = p["pl_pct"]
+                pl_color = "#10b981" if pl >= 0 else "#ef4444"
+                pos_html += f"""
+                <div style='display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #1e293b;'>
+                    <div><strong style='color:#f8fafc; font-size: 1.1rem;'>{p['symbol']}</strong> <span style='color:#64748b; font-size:0.85rem;'>QTY: {p['qty']}</span></div>
+                    <div style='color:{pl_color}; font-weight: 800;'>{'+' if pl >= 0 else ''}{pl:.2f}%</div>
+                    <div style='color:#38bdf8; font-size: 0.85rem;'>Trailing Stop: {p['stop']}%</div>
+                </div>
+                """
+            pos_html += "</div>"
+            st.markdown(pos_html.replace('\n', ''), unsafe_allow_html=True)
+    else:
+        client = get_alpaca_client()
+        if client:
+            try:
+                positions = client.get_all_positions()
+                options = [p for p in positions if "us_option" in str(p.asset_class)]
+                if not options:
+                    st.markdown("<div class='premium-card' style='text-align: center; color: #94a3b8;'>No active positions managed by Execution Agent.</div>", unsafe_allow_html=True)
+                else:
+                    pos_html = "<div class='premium-card'>"
+                    for p in options:
+                        pl = float(p.unrealized_plpc) * 100
+                        pl_color = "#10b981" if pl >= 0 else "#ef4444"
+                        hwm = pl if pl > 0 else 0
+                        stop_level = hwm - 15.0 if hwm > 20.0 else -50.0
+                        
+                        pos_html += f"""
+                        <div style='display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #1e293b;'>
+                            <div><strong style='color:#f8fafc; font-size: 1.1rem;'>{p.symbol}</strong> <span style='color:#64748b; font-size:0.85rem;'>QTY: {abs(float(p.qty))}</span></div>
+                            <div style='color:{pl_color}; font-weight: 800;'>{'+' if pl >= 0 else ''}{pl:.2f}%</div>
+                            <div style='color:#38bdf8; font-size: 0.85rem;'>Trailing Stop: {stop_level:.1f}%</div>
+                        </div>
+                        """
+                    pos_html += "</div>"
+                    st.markdown(pos_html.replace('\n', ''), unsafe_allow_html=True)
+            except:
+                pass
 
     # 7. DECISION JOURNAL & COUNTERFACTUALS
     st.markdown("### 🗂️ DECISION JOURNAL (TRANSPARENCY LOG)")
 
     def load_memory():
-        mem_file = "state/memory.json"
+        is_demo = st.session_state.get("demo_mode", False)
+        mem_file = "state/demo_memory.json" if is_demo else "state/memory.json"
         if os.path.exists(mem_file):
             try:
                 with open(mem_file, "r") as f:
@@ -729,7 +862,22 @@ def render_dashboard_body():
                         <div style='color: #ef4444; font-size: 0.9rem; margin-top: 8px;'><strong>Error:</strong> {reason}</div>
                         <div style='color: #38bdf8; font-size: 0.85rem; margin-top: 4px;'>Event: {item.get('event', 'Unknown')}</div>
                     </div>
+                    </div>
                     """, unsafe_allow_html=True)
 
+        is_demo = st.session_state.get("demo_mode", False)
+        if is_demo:
+            mem_file = "state/demo_memory.json"
+            if os.path.exists(mem_file):
+                try:
+                    logs = json.load(open(mem_file)).get("history", [])
+                    current_len = len(logs)
+                    last_len = st.session_state.get("last_mem_len", -1)
+                    if last_len != -1 and current_len > last_len:
+                        import streamlit.components.v1 as components
+                        components.html("<script>window.parent.document.querySelector('.main').scrollTo({top: window.parent.document.querySelector('.main').scrollHeight, behavior: 'smooth'});</script>", height=0)
+                    st.session_state.last_mem_len = current_len
+                except:
+                    pass
 
 render_dashboard_body()
