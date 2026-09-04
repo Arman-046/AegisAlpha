@@ -229,7 +229,8 @@ def render_dashboard_body():
             agent_color = "#f59e0b"
         elif agent_status == "RUNNING":
             agent_color = "#10b981"
-        elif agent_status == "MARKET CLOSED":
+        elif agent_status in ["MARKET CLOSED", "SLEEPING"]:
+            agent_status = "SLEEPING"
             agent_color = "#3b82f6"
         else:
             agent_color = "#ef4444"
@@ -483,24 +484,42 @@ def render_dashboard_body():
     with col7:
         st.markdown("### SESSION STATISTICS")
         stats = obs.get("stats", {}) if obs else {}
+        
+        ev = int(stats.get('events_detected', 0))
+        tr = int(stats.get('trades_approved', 0))
+        af = int(stats.get('ai_failures', 0))
+        rr = int(stats.get('risk_rejections', 0))
+        osub = int(stats.get('orders_submitted', 0))
+        
+        # Calculate how many were intentionally passed on (not an error, not a trade, not a risk block)
+        passed = max(0, ev - tr - af - rr)
+
         st.markdown(f"""
         <div class="premium-card">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px;">
                 <div>
                     <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">EVENTS DETECTED</div>
-                    <div style="font-size: 2rem; font-weight: 800; color: #f8fafc;">{stats.get('events_detected', '0')}</div>
+                    <div style="font-size: 2rem; font-weight: 800; color: #f8fafc;">{ev}</div>
+                </div>
+                <div>
+                    <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">OPPORTUNITIES PASSED</div>
+                    <div style="font-size: 2rem; font-weight: 800; color: #38bdf8;">{passed}</div>
                 </div>
                 <div>
                     <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">TRADES APPROVED</div>
-                    <div style="font-size: 2rem; font-weight: 800; color: #10b981;">{stats.get('trades_approved', '0')}</div>
+                    <div style="font-size: 2rem; font-weight: 800; color: #10b981;">{tr}</div>
                 </div>
                 <div>
                     <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">AI FAILURES</div>
-                    <div style="font-size: 2rem; font-weight: 800; color: #ef4444;">{stats.get('ai_failures', '0')}</div>
+                    <div style="font-size: 2rem; font-weight: 800; color: #ef4444;">{af}</div>
                 </div>
                 <div>
                     <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">RISK REJECTIONS</div>
-                    <div style="font-size: 2rem; font-weight: 800; color: #f59e0b;">{stats.get('risk_rejections', '0')}</div>
+                    <div style="font-size: 2rem; font-weight: 800; color: #f59e0b;">{rr}</div>
+                </div>
+                <div>
+                    <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">ORDERS SUBMITTED</div>
+                    <div style="font-size: 2rem; font-weight: 800; color: #8b5cf6;">{osub}</div>
                 </div>
             </div>
         </div>

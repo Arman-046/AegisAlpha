@@ -457,7 +457,7 @@ async def heartbeat_loop():
     """Background task to write agent status for the dashboard."""
     while True:
         try:
-            status = "RUNNING" if is_market_open(trading_client) else "MARKET CLOSED"
+            status = "RUNNING" if is_market_open(trading_client) else "SLEEPING"
             obs.heartbeat(status)
         except Exception as e:
             log.error(f"Error in heartbeat_loop: {e}")
